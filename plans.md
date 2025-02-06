@@ -31,20 +31,33 @@ User{
      * (distinct int)
   unreadMessages
      * queue of message UID's
-       * (could alternatively use pointers to members of message class)
+       * (could alternatively use pointers)
+       * TODO: decide data structure by which to store queue. DLL should suffice? (We pop from the start, and insert not far from the end)
   conversations
      * hashmap from a userID (the other user in the chat) to a list of message UID's
        * (could alternatively use pointers)
-       * (we could potentially have a common list between the sender and receiver, as their list will be identical. Python may do this implicitly depending on how we populate it)
+       * (we could potentially have a common list between the sender and receiver, as their lists will be identical. Python may do this implicitly depending on how we populate it, e.g. populating with a mutable data structure will give a pointer to the structure)
+       * TODO: decide data structure by which 'list of messages' is stored: AVL tree should suffice
 }
 
-Note that when a messsage is deleted, this means that we must remove it from:
+Note that when a message is deleted, this means that we must remove it from:
 * the sender's conversations
 * the receiver's conversations
 * the receiver's unreadMessages (if it still exists there, e.g. if GlobalMessages[UID].hasBeenRead = False)
 * our global GlobalMessages dict
 
 Sending a message:
+* creates a new instance of Message class
+* populates sender and receiver's list in 'conversations' with the message
+* if receiver is logged in:
+  * set hasBeenRead to true, allowing receiver to view it
+* if receiver isn't logged in:
+  * set hasBeenRead to false and add to receiver's unreadMessages queue
+
+Ordering messages:
+* use Unix timestamp of server
+* if we let our server process messages in the order that it receives them, it will implicitly sort by timestamp
+  * for a further guarantee, can insert messages into the queue of unreadMessages / the list of messages for the user's conversation in the order they were received
 
 
 
