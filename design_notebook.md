@@ -14,6 +14,8 @@ Thinking about the shape of our packet is something I want to do carefully since
   - Reading a message
   - Deleting a message
   - Deleting accounts
+- Any transaction would then likely start with a handshake between the client and server, resulting in a client storing a session token signifying a shared session with the server (with some resetting interval, perhaps 30 minutes?)
+- I think SQL might be a bit heavyweight as a means of storage: the primary access pattern that we need is, when specifying a sender and receiver for a string of messages, being able to retrieve said string of messages in chronological order
 
 
 
