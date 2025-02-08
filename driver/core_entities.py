@@ -47,7 +47,7 @@ class User:
     def __init__(self, userID: int, username: str, passwordHash: str):
         self.userID = userID
         self.username = username
-        self.passwordHash = password_hash
+        self.passwordHash = passwordHash
         self.unreadMessages = deque()
         self.recent_conversants = []
 
