@@ -1,4 +1,13 @@
 
+
+"""
+NOTES:
+* code for Message, User entities
+* all classes are going to be initialized system-side
+   * Users will be initialized once server receives (and checks for non-conflicting) account creation packet
+   * Messages will be initialized as soon as system receives them from sender client
+"""
+
 import time
 import hashlib
 from collections import deque

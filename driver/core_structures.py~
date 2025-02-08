@@ -1,0 +1,11 @@
+
+
+"""
+NOTES:
+* code for server-wide data structures:
+   * GlobalUserBase
+   * GlobalUserTrie
+      * (Code for core trie functionality contained in ../auxiliary_data_structures/base_trie.py)
+   * GlobalMessageBase
+   * GlobalConversations
+"""
