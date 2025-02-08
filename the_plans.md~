@@ -29,7 +29,6 @@ Message{
 User{
   userID
      * (distinct int)
-  passwordHash
   unreadMessages
      * queue of message UID's (deque)
        * (could alternatively use pointers)
@@ -74,15 +73,6 @@ Packet Form:
 - Session token (16 bytes)
 - Payload (sz - 19 bytes)
 
-
-General Transaction Format:
-Client sends (Create account / Login) packet to server
-* (salt + hash password before sending it over the wire)
-Server sends session token to client
-Client uses session token for all message API requests (read, send message, search for accounts, delete message, delete account
-)
-
-Old Format: 
 ```
 CREATE ACCOUNT:
 Request (0x01)

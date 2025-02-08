@@ -2,14 +2,11 @@
 
 **High-Level Details:**
 
-Design:
-- Data Structures:
-  - User Accounts: Trie
-    - (Ternary search tree)
-      - (We need to be able to do a regex lookup with '*' for any sequence of characters, '?' for any single character)
-      - (We need to be able to delete an account, e.g. delete a string from the Trie)
-  - Messages: Hashmap
-    - (We need to have O(1) insertions / deletions given a UID)
+- Base Data:
+  - **Messages**
+    - Single message between users
+  - **Users**
+    - Single chat conversant
 
 Message{
   UID
@@ -19,47 +16,90 @@ Message{
   senderID
      * (int correseponding to userID of sender)
   receiverID
-     * (int correspondingt to userID of receiver)	
+     * (int corresponding to userID of receiver)
   hasBeenRead
      * (bool)
   timestamp
-     * (?? idk the format)
+     * (Unix format)
 }
+
 
 User{
   userID
      * (distinct int)
+  username
+     * (string)
+  passwordHash
+     * (string)
+     * (64-character hexadecimal string from sha256.hexdigest())
   unreadMessages
      * queue of message UID's (deque)
-       * (could alternatively use pointers)
        * TODO: decide data structure by which to store queue. DLL should suffice? (We pop from the start, and insert not far from the end)
-  conversations
-     * hashmap from a userID (the other user in the chat) to a list of message UID's
-       * (could alternatively use pointers)
-       * (we could potentially have a common list between the sender and receiver, as their lists will be identical. Python may do this implicitly depending on how we populate it, e.g. populating with a mutable data structure will give a pointer to the structure)
-       * TODO: decide data structure by which 'list of messages' is stored: AVL tree should suffice
+  recentConversants
+     * (a list of userID's in the order of message recency, for showing messages on the GUI and deleting conversations on deleted account)
 }
 
-Note that when a message is deleted, this means that we must remove it from:
-* the sender's conversations
-* the receiver's conversations
-* the receiver's unreadMessages (if it still exists there, e.g. if GlobalMessages[UID].hasBeenRead = False)
-* our global GlobalMessages dict
 
-Sending a message:
-* creates a new instance of Message class
-* populates sender and receiver's list in 'conversations' with the message
-* if receiver is logged in:
-  * set hasBeenRead to true, allowing receiver to view it
-* if receiver isn't logged in:
-  * set hasBeenRead to false and add to receiver's unreadMessages queue
+- Data Structures:
+  - **Users**: 
+    - GlobalUserBase
+      - Hashmap: userID -> User (more specifically, reference to User class instance)
+    - GlobalUserTrie
+      - (Trie: Ternary Search Tree)
+      	- (needs to support: regex lookup for '*' (any sequence) and '?' (any single character), deletion)
+	- (key: username, value: User)
+	- (design fallback: change value to userID)
+	- (contained in `base_trie_implementation.py`)
+ - **Messages**:
+    - GlobalMessageBase
+      - Hashmap (UID -> Message)
+    - GlobalConversations
+      - Hashmap ((userID1, userID2) tuple -> list of Message instance handles)
+      	- (design fallback: change value to Message UID)
 
-Ordering messages:
-* use Unix timestamp of server
-* if we let our server process messages in the order that it receives them, it will implicitly sort by timestamp
-  * for a further guarantee, can insert messages into the queue of unreadMessages / the list of messages for the user's conversation in the order they were received
+  
 
-
+Operations:
+1. Create account
+   - Inputs: username, password (hashed)
+   (a) search GlobalUserTrie for username
+      (i.) if username does not exist: create new account
+      	   (a) generate new unique userID
+   	   (b) create instance of User class using metadata
+   	   (c) (generate session token, register on backend, and send back to client)
+     (ii.) (if username already exists: prompt user to log in)
+2. Log into account
+   - Inputs: username, password (hashed)
+   (a) search GlobalUserTrie for username to get user data
+   (b) validate password against existing entry for GlobalUserBase[userID]
+   (c.i.) if password is valid: generate session token, register on backend, and send back to client
+   (c.ii.) (if password is not valid: send back error message)
+3. List accounts
+   - Input: search term (username or wildcard regex)
+   (a) search trie and return list of relevant userID's
+   (b) use userID's 
+4. Send message
+   - Inputs: message content, receiverID
+   (a) create new instance of Message class containing message content and receiverID
+   (b) add new message to GlobalConversations[(userID1, userID2)]
+   (c.i.) if receiver is logged in: set hasBeenRead to true, allowing receiver to view it in GUI
+   (c.ii.) if receiver is not logged in: set hasBeenRead to false and add Message UID to receiver's unreadMessages queue
+5. Read messages
+   - Input: number of new messages to be read
+6.a. Delete message
+   - Input: UID of Message instance
+   (a) remove from GlobalMessageBase
+   (b) if unread, remove from receiver's unreadMessages
+   (c) remove corresponding entry from GlobalConversations
+6.b. Delete conversation
+   - Input: (userID1, userID2)
+   (a) go through all messages in GlobalConversations[(userID1, userID2)]. Delete each message using (6.a.)
+       * (note that deletion from GlobalConversations can be batched into step (b))
+   (b) delete entry in GlobalConversations
+7. Delete account
+   - Input: userID
+   (a) delete account from GlobalUserTrie
+   (b) go through user's recentConversants, and using the (userID1, userID2) pairs as keys, delete all conversations using (6.b.)
 
 
 ---
@@ -73,19 +113,28 @@ Packet Form:
 - Session token (16 bytes)
 - Payload (sz - 19 bytes)
 
+
+General Transaction Format:
+Client sends (Create account / Login) packet to server
+* (salt + hash password before sending it over the wire)
+Server sends session token to client
+Client uses session token for all message API requests (read, send message, search for accounts, delete message, delete account
+)
+
+Old Format (TODO: refine for new types):
 ```
 CREATE ACCOUNT:
 Request (0x01)
 [ Length | 0x01 | username_length (1 byte) | username | password_hash (32 bytes) ]
 Response (0x02)
-[ Length | 0x02 | status_code (1 byte) ]
+[ Length | 0x02 | status_code (1 byte) | session_token (16 bytes) ]
 Status codes: 0x00 (success), 0x01 (name taken), 0x02 (invalid name)
 
 LOGIN:
 Request (0x03)
 [ Length | 0x03 | username_length (1 byte) | username | password_hash (32 bytes) ]
 Response (0x04)
-[ Length | 0x04 | status_code (1 byte) | unread_count (4 bytes) ]
+[ Length | 0x04 | status_code (1 byte) | session_token (16 bytes) | unread_count (4 bytes) ]
 Status codes: 0x00 (success), 0x01 (invalid credentials)
 
 LIST ACCOUNTS:
@@ -125,3 +174,18 @@ Status codes: 0x00 (success), 0x01 (auth failed)
 ```
 
 
+TODO's:
+* refine Wire Protocol to reflect new types / data structures
+  * (Create account, login should be accurate)
+* define session token data structure
+  * (We could have it such that after 30 minutes, a new session token is sent to the client, which is then required for future queries)
+  * (Needed metadata: userID, session token, time elapsed)
+  * (Could keep like an auxiliary global dict for managing session tokens? E.g. userID -> member of session token class, which could contain both the token itself + valid time remaining. Then if it hits 0, we generate a new one and send it to the user)
+
+
+Potential Optimizations:
+* DLL + Hashmap data structure
+  * Use DLL + Hashmap for conversation between users rather than a list (faster deletion)
+  * Use DLL + Hashmap for recentConversants rather than a list
+  * Use DLL + Hashmap for unreadMessages
+ 
