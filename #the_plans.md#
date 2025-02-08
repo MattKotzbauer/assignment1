@@ -19,7 +19,7 @@ Message{
   senderID
      * (int correseponding to userID of sender)
   receiverID
-     * (int correspondingt to userID of receiver)
+     * (int correspondingt to userID of receiver)	
   hasBeenRead
      * (bool)
   timestamp
@@ -29,8 +29,9 @@ Message{
 User{
   userID
      * (distinct int)
+  passwordHash
   unreadMessages
-     * queue of message UID's
+     * queue of message UID's (deque)
        * (could alternatively use pointers)
        * TODO: decide data structure by which to store queue. DLL should suffice? (We pop from the start, and insert not far from the end)
   conversations
@@ -73,6 +74,15 @@ Packet Form:
 - Session token (16 bytes)
 - Payload (sz - 19 bytes)
 
+
+General Transaction Format:
+Client sends (Create account / Login) packet to server
+* (salt + hash password before sending it over the wire)
+Server sends session token to client
+Client uses session token for all message API requests (read, send message, search for accounts, delete message, delete account
+)
+
+Old Format: 
 ```
 CREATE ACCOUNT:
 Request (0x01)
