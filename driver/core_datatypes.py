@@ -1,5 +1,4 @@
 
-
 import time
 import hashlib
 from collections import deque
@@ -36,21 +35,13 @@ class User:
         unread_messages (deque): Queue of unread message UIDs
         recent_conversants (list): List of recent user IDs ordered by message recency
     """
-    def __init__(self, user_id: int, username: str, password: str):
-        self.user_id = user_id
+    def __init__(self, userID: int, username: str, passwordHash: str):
+        self.userID = userID
         self.username = username
-        self.password_hash = self._hash_password(password)
-        self.unread_messages = deque()
+        self.passwordHash = password_hash
+        self.unreadMessages = deque()
         self.recent_conversants = []
-        
-    def _hash_password(self, password: str) -> str:
-        """Hash the password using SHA-256."""
-        return hashlib.sha256(password.encode()).hexdigest()
-    
-    def verify_password(self, password: str) -> bool:
-        """Verify if the provided password matches the stored hash."""
-        return self._hash_password(password) == self.password_hash
-    
+
     def add_unread_message(self, message_uid: int):
         """Add a message UID to the unread messages queue."""
         self.unread_messages.append(message_uid)
