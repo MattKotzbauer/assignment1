@@ -3,7 +3,7 @@
 
 **High-Level Details:**
 
-- Base Data:
+- Primary Entities:
   - **Messages**
     - Single message between users
   - **Users**
@@ -30,7 +30,7 @@ User{
      * (distinct int)
   username
      * (string)
-  passwordHash
+  hashedPassword
      * (string)
      * (64-character hexadecimal string from sha256.hexdigest())
   unreadMessages
@@ -51,6 +51,8 @@ User{
 	- (key: username, value: User)
 	- (design fallback: change value to userID)
 	- (contained in `base_trie_implementation.py`)
+   - GlobalSessionTokens
+     - (Hashmap: userID -> session token)
  - **Messages**:
     - GlobalMessageBase
       - Hashmap (UID -> Message)
@@ -58,7 +60,6 @@ User{
       - Hashmap ((userID1, userID2) tuple -> list of Message instance handles)
       	- (design fallback: change value to Message UID)
 
-  
 
 Operations:
 1. Create account

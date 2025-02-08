@@ -1,4 +1,5 @@
 import re
+from typing import Optional, List, TypeVar, Generic
 
 class TSTNode:
     def __init__(self, char):
@@ -7,16 +8,17 @@ class TSTNode:
         self.eq = None            # Pointer to nodes with the next character in a string.
         self.right = None         # Pointer to nodes with characters greater than self.char.
         self.is_end = False       # Flag indicating if this node terminates a stored word.
-
+        self.value = None
+        
 class TernarySearchTree:
     def __init__(self):
         self.root = None
 
-    def add(self, word):
+    def add(self, word, value):
         """Add a word (account) to the TST."""
         if not word:
             return
-        self.root = self._add(self.root, word, 0)
+        self.root = self._add(self.root, word, value, 0)
 
     def _add(self, node, word, index):
         char = word[index]
