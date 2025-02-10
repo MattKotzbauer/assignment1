@@ -1,0 +1,42 @@
+import hashlib
+from typing import Tuple, Optional
+from core_structures import (
+    GlobalUserBase,
+    GlobalUserTrie,
+    GlobalSessionTokens,
+    GlobalMessageBase,
+    GlobalConversations
+)
+from core_entities import User
+
+user_base = GlobalUserBase()
+user_trie = GlobalUserTrie()
+session_tokens = GlobalSessionTokens()
+message_base = GlobalMessageBase()
+conversations = GlobalConversations()
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def generate_session_token(user_id: int) -> str:
+    # TODO: add time-based expiration
+    token = hashlib.sha256(f"{user_id}_{hash(time.time())}".encode()).hexdigest()
+    session_tokens.tokens[user_id] = token
+    return token
+
+# def handle_account_creation(username: str) -> Tuple[bool, str]:
+    # existing_user = user_trie.trie.get(username)
+    # if existing_user:
+        # return (False, "Account already exists. Please enter password to log in")
+    # return (True, "Username available. Please create a password")
+
+
+def prompt_password(prompt: str):
+    
+    
+def handle_account_creations(username: str):
+    user_exists = user_trie.trie.get(username)
+    if n
+    
+def handle_login():
+    pass
