@@ -56,7 +56,7 @@ def check_password(username: str, hashed_password: str) -> bool:
 # GUI FUNCTIONS START
 def create_window() -> Tuple[bool, str, Optional[str]]:
     root = tk.Tk()
-    root.title("Login System")
+    root.title("Messenger")
     root.geometry("400x300")
 
     main_frame = ttk.Frame(root, padding="20")
