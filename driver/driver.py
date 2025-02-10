@@ -103,43 +103,64 @@ def handle_account_creation() -> Tuple[bool, str, Optional[str]]:
 
 """
 
+
 def create_window() -> Tuple[bool, str, Optional[str]]:
-    result = {'user': None, 'pass': None}
-    root = tk.Tk()
+   result = {'user': None, 'pass': None}
+   root = tk.Tk()
+   root.title("Login")
+   
+   main_frame = ttk.Frame(root, padding="10")
+   main_frame.grid()
+   
+   def submit():
+       result['user'] = user_entry.get()
+       result['pass'] = hash_password(pass_entry.get())
+       root.quit()
 
-    def submit():
-        result['user'] = user_entry.get()
-        result['pass'] = hash_password(pass_entry.get())
-        root.quit()
+   # Username row
+   user_frame = ttk.Frame(main_frame)
+   user_frame.grid(row=0, pady=5)
+   ttk.Label(user_frame, text="Username:").pack(side=tk.LEFT)
+   user_entry = ttk.Entry(user_frame)
+   user_entry.pack(side=tk.LEFT)
 
-    user_entry = ttk.Entry(root)
-    pass_entry = ttk.Entry(root, show="*")
-    ttk.Button(root, text = "Submit", command = submit).pack()
+   # Password row
+   pass_frame = ttk.Frame(main_frame)
+   pass_frame.grid(row=1, pady=5)
+   ttk.Label(pass_frame, text="Password:").pack(side=tk.LEFT)
+   pass_entry = ttk.Entry(pass_frame, show="*")
+   pass_entry.pack(side=tk.LEFT)
 
-    user_entry.pack()
-    pass_entry.pack()
-    root.mainloop()
+   # Submit button
+   ttk.Button(main_frame, text="Submit", command=submit).grid(row=2, pady=10)
+   
+   user_entry.focus()
+   root.mainloop()
 
-    if result['user'] and result['pass']:
-        user = user_trie.trie.get(result['user'])
-        if not user:
-            token = create_account(result['user'], result['pass'])
-            return True, "Account created", token
-        if check_password(result['user'], result['pass']): 
-            return True, "Login success", generate_session_token(user.userID)
-    return False, "Failed", None
+   if result['user'] and result['pass']:
+       user = user_trie.trie.get(result['user'])
+       if not user:
+           token = create_account(result['user'], result['pass'])
+           return True, "Account created", token
+       if check_password(result['user'], result['pass']):
+           return True, "Login success", generate_session_token(user.userID)
+   return False, "Failed", None
 
 def main_window(user: str):
-    root = tk.Tk()
-    ttk.Button(root, text = "Logout", command = root.destroy).pack()
-    root.mainloop()
-    create_window()
+   root = tk.Tk()
+   root.title("Logged In")
+   
+   main_frame = ttk.Frame(root, padding="10")
+   main_frame.grid()
+   
+   ttk.Button(main_frame, text="Logout", command=root.destroy).grid(pady=10)
+   root.mainloop()
+   create_window()
 
 if __name__ == "__main__":
-    while True:
-        ok, msg, token = create_window()
-        if ok:
-            main_window(token)
-        else:
-            break
-    # handle_account_creation()
+   while True:
+       ok, msg, token = create_window()
+       if ok:
+           main_window(token)
+       else:
+           break
