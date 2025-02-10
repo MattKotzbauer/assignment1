@@ -19,7 +19,8 @@ class GlobalUserTrie:
     with wildcards (* for any sequence, ? for any character).
     """
     def __init__(self):
-        self.trie: TernarySearchTree[User] = TernarySearchTree
+        # self.trie: TernarySearchTree[User] = TernarySearchTree
+        self.trie: TernarySearchTree[User] = TernarySearchTree[User]()
 
 # (this guy is a massive todo)
 class GlobalSessionTokens:
