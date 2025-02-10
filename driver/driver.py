@@ -51,7 +51,8 @@ def check_password(username: str, hashed_password: str) -> bool:
     checked_user = user_trie.trie.get(username)
     assert(checked_user)
     return checked_user.passwordHash == hashed_password
-    
+
+"""
 def prompt_text(prompt: str)-> str:
 
     result = None
@@ -77,7 +78,7 @@ def prompt_text(prompt: str)-> str:
     root.mainloop()
     root.destroy()
     return result
-        
+
 # (Output: success, message, session token)
 def handle_account_creation() -> Tuple[bool, str, Optional[str]]:
     # (account creation entry point)
@@ -100,6 +101,45 @@ def handle_account_creation() -> Tuple[bool, str, Optional[str]]:
         return (True, "Created account.", token)
         # Create account with username and hash of desired password
 
+"""
+
+def create_window() -> Tuple[bool, str, Optional[str]]:
+    result = {'user': None, 'pass': None}
+    root = tk.Tk()
+
+    def submit():
+        result['user'] = user_entry.get()
+        result['pass'] = hash_password(pass_entry.get())
+        root.quit()
+
+    user_entry = ttk.Entry(root)
+    pass_entry = ttk.Entry(root, show="*")
+    ttk.Button(root, text = "Submit", command = submit).pack()
+
+    user_entry.pack()
+    pass_entry.pack()
+    root.mainloop()
+
+    if result['user'] and result['pass']:
+        user = user_trie.trie.get(result['user'])
+        if not user:
+            token = create_account(result['user'], result['pass'])
+            return True, "Account created", token
+        if check_password(result['user'], result['pass']): 
+            return True, "Login success", generate_session_token(user.userID)
+    return False, "Failed", None
+
+def main_window(user: str):
+    root = tk.Tk()
+    ttk.Button(root, text = "Logout", command = root.destroy).pack()
+    root.mainloop()
+    create_window()
 
 if __name__ == "__main__":
-    handle_account_creation()
+    while True:
+        ok, msg, token = create_window()
+        if ok:
+            main_window(token)
+        else:
+            break
+    # handle_account_creation()
