@@ -106,7 +106,7 @@ def send_message(senderID: int, recipientID: int, message: str):
     return True
 
 # FUNCTION 5
-def read_messages(user_id, message_quantity: int):
+def read_messages(user_id: int, message_quantity: int):
     """
     Process unread messages for a user, marking them as read and removing from unread queue.
     
@@ -115,7 +115,16 @@ def read_messages(user_id, message_quantity: int):
         message_quantity (int): Maximum number of messages to process
     """
     assert(user_id in user_base.users)
-    
+
+    for i in range(message_quantity):
+        if not user.unread_messages:
+            break
+
+        message_id = user.unread_messages.popleft()
+        message = message_base.messages.get(message_id)
+        if not message:
+            continue
+        message.has_been_read = True
     
 # FUNCTION 6
 def delete_message(message_uid: int):
@@ -162,7 +171,15 @@ def delete_message(message_uid: int):
                 receiver.recent_conversants.remove(sender_id)
 
     return True
-                
+
+# (TODO: support deleting whole conversation? for later)
+
+# FUNCTION 7
+def delete_account(user_id: int):
+    # 1: delete unread messages
+    for unread_message in 
+    # 2: delete all conversations
+    for converant 
     
     
 
