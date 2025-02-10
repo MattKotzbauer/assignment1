@@ -103,64 +103,143 @@ def handle_account_creation() -> Tuple[bool, str, Optional[str]]:
 
 """
 
-
+"""
 def create_window() -> Tuple[bool, str, Optional[str]]:
-   result = {'user': None, 'pass': None}
-   root = tk.Tk()
-   root.title("Login")
-   
-   main_frame = ttk.Frame(root, padding="10")
-   main_frame.grid()
-   
-   def submit():
-       result['user'] = user_entry.get()
-       result['pass'] = hash_password(pass_entry.get())
-       root.quit()
-
-   # Username row
-   user_frame = ttk.Frame(main_frame)
-   user_frame.grid(row=0, pady=5)
-   ttk.Label(user_frame, text="Username:").pack(side=tk.LEFT)
-   user_entry = ttk.Entry(user_frame)
-   user_entry.pack(side=tk.LEFT)
-
-   # Password row
-   pass_frame = ttk.Frame(main_frame)
-   pass_frame.grid(row=1, pady=5)
-   ttk.Label(pass_frame, text="Password:").pack(side=tk.LEFT)
-   pass_entry = ttk.Entry(pass_frame, show="*")
-   pass_entry.pack(side=tk.LEFT)
-
-   # Submit button
-   ttk.Button(main_frame, text="Submit", command=submit).grid(row=2, pady=10)
-   
-   user_entry.focus()
-   root.mainloop()
-
-   if result['user'] and result['pass']:
-       user = user_trie.trie.get(result['user'])
-       if not user:
-           token = create_account(result['user'], result['pass'])
-           return True, "Account created", token
-       if check_password(result['user'], result['pass']):
-           return True, "Login success", generate_session_token(user.userID)
-   return False, "Failed", None
-
-def main_window(user: str):
-   root = tk.Tk()
-   root.title("Logged In")
-   
-   main_frame = ttk.Frame(root, padding="10")
-   main_frame.grid()
-   
-   ttk.Button(main_frame, text="Logout", command=root.destroy).grid(pady=10)
-   root.mainloop()
-   create_window()
+    root = tk.Tk()
+    root.title("Login")
+    root.geometry("400x300")  # Set window size
+    
+    main_frame = ttk.Frame(root, padding="20")
+    main_frame.grid(sticky="nsew")
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
+    
+    def submit():
+        username = user_entry.get()
+        password = hash_password(pass_entry.get())
+        user = user_trie.trie.get(username)
+        
+        if username and password:
+            success = False
+            if not user:
+                token = create_account(username, password)
+                success = True
+            elif check_password(username, password):
+                token = generate_session_token(user.userID)
+                success = True
+                
+            if success:
+                # Clear frame and show logged in view
+                for widget in main_frame.winfo_children():
+                    widget.destroy()
+                ttk.Label(main_frame, text=f"Welcome, {username}!").grid(pady=10)
+                ttk.Button(main_frame, text="Logout", command=lambda: show_login()).grid(pady=10)
+                return
+                
+        # Show error if login failed
+        error_label.config(text="Invalid credentials")
+    
+    def show_login():
+        # Clear frame and show login view
+        for widget in main_frame.winfo_children():
+            widget.destroy()
+            
+        # Username row
+        user_frame = ttk.Frame(main_frame)
+        user_frame.grid(row=0, pady=10)
+        ttk.Label(user_frame, text="Username:").pack(side=tk.LEFT, padx=5)
+        user_entry = ttk.Entry(user_frame, width=30)
+        user_entry.pack(side=tk.LEFT)
+        
+        # Password row
+        pass_frame = ttk.Frame(main_frame)
+        pass_frame.grid(row=1, pady=10)
+        ttk.Label(pass_frame, text="Password: ").pack(side=tk.LEFT, padx=5)
+        pass_entry = ttk.Entry(pass_frame, show="*", width=30)
+        pass_entry.pack(side=tk.LEFT)
+        
+        # Submit button and error label
+        ttk.Button(main_frame, text="Submit", command=submit).grid(row=2, pady=10)
+        error_label = ttk.Label(main_frame, text="", foreground="red")
+        error_label.grid(row=3, pady=5)
+        
+        user_entry.focus()
+    
+    show_login()
+    root.mainloop()
+    return False, "Closed", None
 
 if __name__ == "__main__":
-   while True:
-       ok, msg, token = create_window()
-       if ok:
-           main_window(token)
-       else:
-           break
+    create_window()
+"""
+
+def create_window() -> Tuple[bool, str, Optional[str]]:
+    root = tk.Tk()
+    root.title("Login")
+    root.geometry("400x300")
+
+    main_frame = ttk.Frame(root, padding="20")
+    main_frame.grid(sticky="nsew")
+    root.grid_rowconfigure(0, weight=1)
+    root.grid_columnconfigure(0, weight=1)
+
+    # Make these nonlocal so submit() can access them
+    user_entry = None
+    pass_entry = None
+    error_label = None
+    
+    def submit():
+        nonlocal user_entry, pass_entry, error_label
+        username = user_entry.get()
+        password = hash_password(pass_entry.get())
+        user = user_trie.trie.get(username)
+        
+        if username and password:
+            success = False
+            if not user:
+                token = create_account(username, password)
+                success = True
+            elif check_password(username, password):
+                token = generate_session_token(user.userID)
+                success = True
+                
+            if success:
+                for widget in main_frame.winfo_children():
+                    widget.destroy()
+                ttk.Label(main_frame, text=f"Welcome, {username}!").grid(pady=10)
+                ttk.Button(main_frame, text="Logout", command=lambda: show_login()).grid(pady=10)
+                return
+                
+        error_label.config(text="Invalid credentials")
+    
+    def show_login():
+        nonlocal user_entry, pass_entry, error_label
+        for widget in main_frame.winfo_children():
+            widget.destroy()
+            
+        user_frame = ttk.Frame(main_frame)
+        user_frame.grid(row=0, pady=10)
+        ttk.Label(user_frame, text="Username:").pack(side=tk.LEFT, padx=5)
+        user_entry = ttk.Entry(user_frame, width=30)
+        user_entry.pack(side=tk.LEFT)
+        
+        pass_frame = ttk.Frame(main_frame)
+        pass_frame.grid(row=1, pady=10)
+        ttk.Label(pass_frame, text="Password: ").pack(side=tk.LEFT, padx=5)
+        pass_entry = ttk.Entry(pass_frame, show="*", width=30)
+        pass_entry.pack(side=tk.LEFT)
+        
+        ttk.Button(main_frame, text="Submit", command=submit).grid(row=2, pady=10)
+        error_label = ttk.Label(main_frame, text="", foreground="red")
+        error_label.grid(row=3, pady=5)
+        
+        user_entry.focus()
+    
+    show_login()
+    root.mainloop()
+    return False, "Closed", None
+
+if __name__ == "__main__":
+    create_window()
+
+    
