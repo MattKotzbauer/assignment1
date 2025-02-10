@@ -116,6 +116,7 @@ def read_messages(user_id: int, message_quantity: int):
     """
     assert(user_id in user_base.users)
 
+    user = user_base.users[user_id]
     for i in range(message_quantity):
         if not user.unread_messages:
             break
@@ -177,12 +178,23 @@ def delete_message(message_uid: int):
 # FUNCTION 7
 def delete_account(user_id: int):
     # 1: delete unread messages
-    for unread_message in 
-    # 2: delete all conversations
-    for converant 
-    
-    
+    user = user_base.users[user_id]
+    for unread_message_uid in user.unread_messages:
+        del message_base.messages[unread_message_uid]
+        message_base._deleted_message_ids.add(unread_message_uid)
+        
+    # 2: TODO: delete all conversations involving user so that they don't repopulate / user doesn't show up in other feeds
 
+    # 3: delete user's account from hashmap and trie
+    del user_base.users[user_id]
+    user_base._deleted_user_ids.add(user_id)
+    user_trie.trie.remove(user.username)
+
+    if user_id in session_tokens.tokens:
+        del session_tokens.tokens[user_id]
+
+    return True
+    
     
 # GUI FUNCTIONS START
 def create_window() -> Tuple[bool, str, Optional[str]]:
