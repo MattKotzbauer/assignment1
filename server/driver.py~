@@ -40,8 +40,8 @@ def create_account(username: str, hashed_password: str) -> str:
     token = generate_session_token(user_id)
     return(token)
 
-# def hash_password(password: str) -> str:
-    # return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def generate_session_token(user_id: int) -> str:
     # TODO: add time-based expiration
