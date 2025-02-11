@@ -1,7 +1,7 @@
 from typing import Dict, List, Tuple, Optional, Set
 from collections import defaultdict
-from core_entities import User, Message
-from tst_implementation import TernarySearchTree
+from .core_entities import User, Message
+from .tst_implementation import TernarySearchTree
 
 class GlobalUserBase:
     """

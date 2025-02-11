@@ -3,14 +3,15 @@ import time
 import tkinter as tk
 from tkinter import ttk
 from typing import Tuple, Optional
-from core_structures import (
+
+from .core_structures import (
     GlobalUserBase,
     GlobalUserTrie,
     GlobalSessionTokens,
     GlobalMessageBase,
     GlobalConversations
 )
-from core_entities import User
+from .core_entities import User, Message
 pass
 user_base = GlobalUserBase()
 user_trie = GlobalUserTrie()
@@ -22,23 +23,27 @@ conversations = GlobalConversations()
 # FUNCTIONS 1 + 2
 def create_account(username: str, hashed_password: str) -> str:
     # Create account from given username and password
-    assert not user_trie.trie.get(username)
+    existing_user = user_trie.trie.get(username)
+    if existing_user:
+        raise AssertionError("Username already exists")
 
     if user_base._deleted_user_ids:
-        # (ok this just means we have to be very careful about deletions)
         user_id = user_base._deleted_user_ids.pop()
     else:
         user_id = user_base._next_user_id
         user_base._next_user_id += 1
 
+    print(f"Creating new user with ID {user_id} and username {username}")
     # Create user
     new_user = User(user_id, username, hashed_password)
-    # (add to message base)
+    # Add to user base
     user_base.users[user_id] = new_user
-    # (add to trie)
+    # Add to trie
     user_trie.trie.add(username, new_user)
+    
+    print(f"User created successfully. Generating session token...")
     token = generate_session_token(user_id)
-    return(token)
+    return token
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -49,19 +54,25 @@ def generate_session_token(user_id: int) -> str:
     session_tokens.tokens[user_id] = token
     return token
 
-def check_password(username: str, hashed_password: str) -> bool:
+def check_password(username: str, hashed_password: str) -> str:
+    print(f"Checking password for user: {username}")
     checked_user = user_trie.trie.get(username)
-    assert(checked_user)
-    return checked_user.passwordHash == hashed_password
+    if not checked_user:
+        print(f"User {username} not found")
+        raise AssertionError("User not found")
+    print(f"Found user, comparing passwords")
+    if checked_user.passwordHash != hashed_password:
+        raise AssertionError("Invalid password")
+    return generate_session_token(checked_user.userID)
 
 # FUNCTION 3
 def list_accounts(wildcard_username: str) -> list[str]:
-    # (return list of usernames matching wildcard pattern within trie)
-    matching_usernames = user_trie.trie.regex_search(wildcard_username, return_values=False)
-    return sorted(matching_usernames)    
+    # Return list of usernames matching wildcard pattern within trie
+    matching_usernames = user_trie.trie.regex_search(wildcard_username, return_values=False) or []
+    return sorted(matching_usernames)
 
 # FUNCTION 4
-def send_message(senderID: int, recipientID: int, message: str):
+def send_message(sender_id: int, recipient_id: int, message_content: str) -> bool:
     """
     Send a message from one user to another, handling message storage and notification.
     
@@ -73,59 +84,101 @@ def send_message(senderID: int, recipientID: int, message: str):
     Returns:
         bool: True if message was sent successfully, False otherwise
     """
-    # TODO: handle case where recipient account gets deleted as sender is writing message
+    # Validate users exist
     if sender_id not in user_base.users or recipient_id not in user_base.users:
         return False
 
+    # Get message ID
     if message_base._deleted_message_ids:
-        message_id = message_base.deleted_message_ids.pop()
+        message_id = message_base._deleted_message_ids.pop()
     else:
         message_id = message_base._next_message_id
-        message_base._next_message_id
+        message_base._next_message_id += 1
 
+    # Check if recipient is online
     is_recipient_online = recipient_id in session_tokens.tokens
 
+    # Create message
     new_message = Message(
         uid=message_id,
         contents=message_content,
         sender_id=sender_id,
         receiver_id=recipient_id,
-        has_been_read=is_recipient_online  # Message is considered read if recipient is online
+        has_been_read=False  # Start as unread for recipient
     )
 
-    message_base.messages[message_id] = new_message
-    conversation_key = tuple(sorted([sender_id, recipient_id]))
-    conversations.conversations[conversations_key].append(new_message)
+    print(f"Creating message with ID {message_id} from {sender_id} to {recipient_id}")
 
+    # Store message
+    message_base.messages[message_id] = new_message
+    print(f"Stored message in message_base")
+    
+    # Add to conversation history
+    conversation_key = tuple(sorted([sender_id, recipient_id]))
+    if conversation_key not in conversations.conversations:
+        conversations.conversations[conversation_key] = []
+    conversations.conversations[conversation_key].append(new_message)
+    print(f"Added message to conversation history between {sender_id} and {recipient_id}")
+    
+    # Update recent conversations
     user_base.users[sender_id].update_recent_conversant(recipient_id)
     user_base.users[recipient_id].update_recent_conversant(sender_id)
-
-    if not is_recipient_online:
-        user_base.users[recipient_id].add_unread_message(message_id)
-
+    
+    # Add to recipient's unread messages
+    user_base.users[recipient_id].unreadMessages.append(message_id)
+    print(f"Added message {message_id} to {recipient_id}'s unread messages")
+    
+    # Create a copy of the message that's marked as read for the sender
+    sender_message = Message(
+        uid=message_id,
+        contents=message_content,
+        sender_id=sender_id,
+        receiver_id=recipient_id,
+        has_been_read=True  # Always read for sender
+    )
+    message_base.messages[message_id] = sender_message
+    
     return True
 
 # FUNCTION 5
-def read_messages(user_id: int, message_quantity: int):
+def read_messages(user_id: int, message_quantity: int) -> list:
     """
     Process unread messages for a user, marking them as read and removing from unread queue.
     
     Args:
         user_id (int): ID of user whose messages to process
         message_quantity (int): Maximum number of messages to process
+        
+    Returns:
+        list: List of messages that were read
     """
     assert(user_id in user_base.users)
 
     user = user_base.users[user_id]
-    for i in range(message_quantity):
-        if not user.unread_messages:
-            break
-
-        message_id = user.unread_messages.popleft()
+    read_messages = []
+    
+    # Process all unread messages
+    while user.unreadMessages and len(read_messages) < message_quantity:
+        message_id = user.unreadMessages.popleft()
         message = message_base.messages.get(message_id)
         if not message:
             continue
+            
+        # Mark message as read in message_base
         message.has_been_read = True
+        
+        # Mark message as read in conversations
+        conversation_key = tuple(sorted([message.sender_id, message.receiver_id]))
+        if conversation_key in conversations.conversations:
+            for msg in conversations.conversations[conversation_key]:
+                if msg.uid == message_id:
+                    msg.has_been_read = True
+                    break
+            
+        message.has_been_read = True
+        read_messages.append(message)
+    
+    return read_messages
     
 # FUNCTION 6
 def delete_message(message_uid: int):
@@ -176,18 +229,48 @@ def delete_message(message_uid: int):
 # (TODO: support deleting whole conversation? for later)
 
 # FUNCTION 7
-def delete_account(user_id: int):
-    # 1: delete unread messages
-    user = user_base.users[user_id]
-    for unread_message_uid in user.unread_messages:
-        del message_base.messages[unread_message_uid]
-        message_base._deleted_message_ids.add(unread_message_uid)
+def delete_account(user_id: int) -> bool:
+    """
+    Delete a user account and handle cleanup of related data.
+    
+    Args:
+        user_id (int): ID of the user account to delete
         
-    # 2: TODO: delete all conversations involving user so that they don't repopulate / user doesn't show up in other feeds
-
-    # 3: delete user's account from hashmap and trie
-    del user_base.users[user_id]
-    user_base._deleted_user_ids.add(user_id)
+    Returns:
+        bool: True if account was successfully deleted
+    """
+    try:
+        # Remove from session tokens if logged in
+        if user_id in session_tokens.tokens:
+            del session_tokens.tokens[user_id]
+        
+        # Get user
+        user = user_base.users[user_id]
+        
+        # Delete unread messages
+        for unread_message_uid in user.unread_messages:
+            delete_message(unread_message_uid)
+        
+        # Delete all conversations involving user
+        for conv_key in list(conversations.conversations.keys()):
+            if user_id in conv_key:
+                for msg in conversations.conversations[conv_key]:
+                    delete_message(msg.uid)
+                del conversations.conversations[conv_key]
+        
+        # Remove from trie
+        user_trie.trie.remove(user.username)
+        
+        # Remove from user base
+        del user_base.users[user_id]
+        
+        # Add user ID back to pool
+        user_base._deleted_user_ids.add(user_id)
+        
+        return True
+    except Exception as e:
+        print(f"Error deleting account: {e}")
+        return False
     user_trie.trie.remove(user.username)
 
     if user_id in session_tokens.tokens:
