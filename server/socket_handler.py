@@ -260,27 +260,28 @@ class Server:
         full_response = response_length + response_body
         print(full_response)
         return full_response
-        
+
     # 0x09: List Accounts
     def list_account(self, packet_content: bytes) -> bytes:
-        # Request format (List accounts):
-        #   1. Length (4 bytes) of remaining packet body
-        #   2. Opcode 0x09 (1 byte)
-        #   3. User ID (2 bytes)
-        #   4. Session token (32 bytes)
-        #   5. Wildcard length (2 bytes)
-        #   6. Wildcard string (variable length, UTF-8 encoded)
-        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
-        provided_token = packet_content[5:5+32]
-        wildcard_length = int.from_bytes(packet_content[5+32:5+32+2], byteorder='big')
-        wildcard = packet_content[5+32+2:5+32+2+wildcard_length].decode('utf-8')
+        # Correct parsing:
+        # Byte 0-3: Length
+        # Byte 4: Opcode (0x09)
+        # Bytes 5-6: User ID (2 bytes)
+        # Bytes 7-38: Session token (32 bytes)
+        # Bytes 39-40: Wildcard length (2 bytes)
+        # Bytes 41+: Wildcard string (UTF-8)
 
-        stored_token = driver.session_tokens.tokens.get(user_id)
-        # authenticated = stored_token and bytes.fromhex(stored_token) == provided_token
-        # print(authenticated)
-        # matching_accounts = driver.list_accounts(wildcard) if authenticated else []
-        matching_accounts = driver.list_accounts(wildcard)
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        provided_token = packet_content[7:7+32]  # Correct offset for the token
+        wildcard_length = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
+        wildcard = packet_content[7+32+2:7+32+2+wildcard_length].decode('utf-8')
         
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        # If authentication were enabled, we would check:
+        authenticated = stored_token and bytes.fromhex(stored_token) == provided_token
+        matching_accounts = driver.list_accounts(wildcard) if authenticated else []
+        # matching_accounts = driver.list_accounts(wildcard)
+
         # Response format:
         #   1. Length (4 bytes) of remaining packet body
         #   2. Opcode 0x10 (1 byte)
@@ -289,6 +290,7 @@ class Server:
         #      - Username length (2 bytes)
         #      - Username (variable length, UTF-8 encoded)
         
+        # Response construction remains unchanged...
         count = len(matching_accounts)
         response_body = bytes([0x10]) + count.to_bytes(2, byteorder='big')
         
@@ -296,11 +298,11 @@ class Server:
             username_bytes = username.encode('utf-8')
             uname_length = len(username_bytes)
             response_body += uname_length.to_bytes(2, byteorder='big') + username_bytes
-
-        response_length = len(response_body).to_bytes(4, byteorder='big')
-        full_response = response_length + response_body
-        return full_response
             
+            response_length = len(response_body).to_bytes(4, byteorder='big')
+            full_response = response_length + response_body
+            return full_response
+    
     # 0x11: Display Conversation
     def display_conversation(self, packet_content: bytes) -> bytes:
         pass
