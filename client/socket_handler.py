@@ -175,6 +175,8 @@ class Client:
 
         packet = packet_length + packet_body
 
+        response = self.send_request(packet)
+        
         if len(response) < 4 + 1 + 1 + 32 + 4:
             raise Exception("Incomplete response")
 
@@ -189,9 +191,33 @@ class Client:
 
         return success, token, unread_count
         
-        
     # 0x07: Log out of Account
-    
+    def log_out_of_account(self, user_id: int, session_token: str) -> None:
+        """
+        Opcode 0x07 (Log Out Request) and expect a Response (0x08):
+        Request format:
+            4-byte length of following body,
+            0x07,
+            2-byte user id,
+            32-byte session token
+        Response format:
+            4-byte total length,
+            0x08
+        """
+        packet_body = bytes([0x07])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += bytes.fromhex(session_token)
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+
+        packet =  packet_length + packet_body
+
+        response = self.send_request(packet)
+        if len(response) < 4 + 1:
+            raise Exception("Incomplete response")
+
+        opcode_resp = response[4]
+        if opcode_resp != 0x08:
+            raise Exception("Unexpected opcode in log_out_account")
     
     # 0x09: List Accounts
     
