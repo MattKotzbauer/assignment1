@@ -1,0 +1,23 @@
+import socket
+import selectors
+import types
+from typing import Dict, Optional
+import driver
+from core_entities import Message, User
+from socket_handler import Server
+
+if __name__ == "__main__":
+    username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+    username = packet_content[7:7+username_length].decode('utf-8')
+    user_exists = driver.user_trie.trie.get(username) is not None
+    status = 0x01 if user_exists else 0x00
+    print(f"Username '{username}' exists: {user_exists}. Sending status code {status:#04x}.")
+    # Response format:
+    #   1. Length (4 bytes) of remaining packet body (here: opcode + status = 1 + 1 = 2 bytes)
+    #   2. Opcode 0x02 (1 byte)
+    #   3. Status code (1 byte)
+    #      - 0x00: username is available (client should send 0x03 register request)
+    #      - 0x01: username is taken (client should send 0x05 login request)
+    response_body = bytes([0x02, status])
+    response_length = len(response_body).to_bytes(4, byteorder='big')
+    full_response = response_length + response_body

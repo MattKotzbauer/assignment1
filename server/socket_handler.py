@@ -7,6 +7,7 @@ import driver
 from core_entities import Message, User
 
 class Server:
+    # GENERAL-FORM SOCKET FN's START
     def __init__(self, host: str = "127.0.0.1", port: int = 65432):
         self.host = host
         self.port = port
@@ -86,7 +87,9 @@ class Server:
         sock.close()
         if sock in self.connections:
             del self.connections[sock]
-
+    # GENERAL-FORM SOCKET FN's END
+      
+    # PACKET HANDLER CONTROL FLOW START
     def response_packet(self, packet_content: bytes, client_socket: socket.socket):
         try:
             if client_socket in self.connections:
@@ -100,27 +103,14 @@ class Server:
                 print("Received packet is too short.")
                 return
 
-            # packet_length: denotes total length of packet
+            # packet_length: denotes length of remaining packet content
             packet_length = int.from_bytes(packet_content[0:4], byteorder='big')
             # opcode: denotes type of request
             opcode = packet_content[4]
             
-            if opcode == 0x01:
-                username_length = int.from_bytes(packet_content[5:7], byteorder='big')
-                username = packet_content[7:7+username_length].decode('utf-8')
-                user_exists = driver.user_trie.trie.get(username) is not None
-                status = 0x01 if user_exists else 0x00
-                print(f"Username '{username}' exists: {user_exists}. Sending status code {status:#04x}.")
-                # Response format:
-                #   1. Length (4 bytes) for the packet body (here: opcode + status = 1 + 1 = 2 bytes)
-                #   2. Opcode 0x02 (1 byte)
-                #   3. Status code (1 byte)
-                response_body = bytes([0x02, status])
-                response_length = len(response_body).to_bytes(4, byteorder='big')
-                full_response = response_length + response_body
-
+            if opcode == 0x01: 
+                full_response = search_username(packet_content)
                 self.response_packet(full_response, client_socket)
-
             elif opcode == 0x03:
                 pass
             elif opcode == 0x05:
@@ -133,11 +123,43 @@ class Server:
         except Exception as e:
             print(f"Error processing packet: {e}")
 
+    # PACKET HANDLER CONTROL FLOW END
+
+    # OP CODE FUNCTIONS START
+    
+    # 0x01: Search Username
+    def search_username(self, request_content: bytes) -> bytes:
+        # Request format (Enter username):
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x01 (1 byte) - enter username request
+        #   3. Username length (2 bytes)
+        #   4. Username (variable length, UTF-8 encoded)
+        """
+        3. cast wire protocol packet into API function inputs)
+        """
+        
+        username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+        username = packet_content[7:7+username_length].decode('utf-8')
+        user_exists = driver.user_trie.trie.get(username) is not None
+        status = 0x01 if user_exists else 0x00
+        print(f"Username '{username}' exists: {user_exists}. Sending status code {status:#04x}.")
+        # Response format:
+        #   1. Length (4 bytes) of remaining packet body (here: opcode + status = 1 + 1 = 2 bytes)
+        #   2. Opcode 0x02 (1 byte)
+        #   3. Status code (1 byte)
+        #      - 0x00: username is available (client should send 0x03 register request)
+        #      - 0x01: username is taken (client should send 0x05 login request)
+        response_body = bytes([0x02, status])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
+            
+    # 0x03: ...
+    # OP CODE FUNCTIONS END
+       
+    
+
 if __name__ == "__main__":
-    user_john = User(1, "john", "foo")
-    driver.user_trie.trie.add("john", user_john)
-    sample = driver.user_trie.trie.get("john")
-    print(sample)
-    # server = Server()
-    # server.start()
-    # server.run()
+    server = Server()
+    server.start()
+    server.run()
