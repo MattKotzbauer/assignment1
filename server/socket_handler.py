@@ -263,7 +263,7 @@ class Server:
 
     # 0x09: List Accounts
     def list_account(self, packet_content: bytes) -> bytes:
-        # Correct parsing:
+        # Request format: 
         # Byte 0-3: Length
         # Byte 4: Opcode (0x09)
         # Bytes 5-6: User ID (2 bytes)
@@ -305,11 +305,105 @@ class Server:
     
     # 0x11: Display Conversation
     def display_conversation(self, packet_content: bytes) -> bytes:
-        pass
-    
+        """
+        Request format:
+            4-byte length of following body,
+            0x11,
+            2-byte user id,
+            32-byte session token,
+            2-byte conversant user id
+        """
+        if len(packet_content) < 4 + 1 + 2 + 32 + 2:
+            print("Display conversation request too short.")
+            return b""
+
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        session_token = packet_content[7:7+32]
+        conversant_id = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
+
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or bytes.fromhex(stored_token) != session_token:
+            print("Invalid session token for display conversation.")
+            messages = []
+        else:
+            # Conversations are stored using a sorted tuple as key
+            key = tuple(sorted([user_id, conversant_id]))
+            messages = driver.conversations.conversations.get(key, [])
+            
+        """
+        Response format:
+            4-byte total length,
+            0x12,
+            4-byte count of messages,
+            For each message:
+                4-byte message uid
+                2-byte message length
+                1-byte flag (0x00 if user is recipient, 0x01 if user is sender)
+                message content (UTF-8 string)
+        """   
+        response_body = bytes([0x12])
+        message_count = len(messages)
+        response_body += message_count.to_bytes(4, byteorder='big')
+        
+        for msg in messages:
+            uid_bytes = msg.uid.to_bytes(4, byteorder='big')
+            content_bytes = msg.contents.encode('utf-8')
+            content_length_bytes = len(content_bytes).to_bytes(2, byteorder='big')
+            
+            # Determine flag: 0x01 if requesting user is sender, else 0x00
+            flag = 0x01 if msg.sender_id == user_id else 0x00
+            
+            response_body += uid_bytes + content_length_bytes + bytes([flag]) + content_bytes
+
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        
+        return full_response
+        
     # 0x13: Send Message
     def send_message(self, packet_content: bytes) -> bytes:
-        pass
+        """
+        Request format:
+            4-byte total length,
+            0x13,
+            user ID (2 bytes),
+            session token (32 bytes),
+            recipient ID (2 bytes),
+            message length (2 bytes),
+            message content
+        """
+
+        minimum_length = 4 + 1 + 2 + 32 + 2 + 2  # At least room for header, IDs, token, message length
+        if len(packet_content) < minimum_length:
+            print("Send message request too short.")
+            return b""
+        
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        session_token = packet_content[7:7+32]
+        recipient_id = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
+        msg_length = int.from_bytes(packet_content[7+32+2:7+32+2+2], byteorder='big')
+        msg_start = 7+32+2+2
+        message = packet_content[msg_start:msg_start+msg_length].decode('utf-8')
+        
+        # Validate session token.
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or bytes.fromhex(stored_token) != session_token:
+            print("Invalid session token for send message.")
+        else:
+            driver.send_message(user_id, recipient_id, message)
+
+        """
+        Response format:
+            4-byte length,
+            0x14,
+            user ID (2 bytes),
+            session token (32 bytes)
+        """
+        # Response (0x14): 4-byte length, 0x14 (no additional payload)
+        response_body = bytes([0x14])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
     
     # 0x15: Read Messages
     def read_messages(self, packet_content: bytes) -> bytes:

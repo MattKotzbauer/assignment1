@@ -243,7 +243,7 @@ Client uses session token for all message API requests (read, send message, sear
 	1. Request (0x19)
 		1. length
 		2. 0x19
-		3. userID
+		3. userID (2 bytes)
 		4. session token (32 bytes)
 	2. Response (0x20)
 		1. length
