@@ -567,14 +567,41 @@ class ChatInterface:
         """Delete selected messages"""
         selection = self.messages_list.curselection()
         if not selection:
+            messagebox.showinfo("No Messages Selected", "Please select one or more messages to delete.")
             return
+            
+        # Skip if separator is selected
+        for index in selection:
+            item_text = self.messages_list.get(index)
+            if '━' in item_text:
+                messagebox.showwarning("Invalid Selection", "Cannot delete separator lines. Please select only messages.")
+                return
         
+        # Confirm deletion
+        msg = "Are you sure you want to delete the selected message(s)? This action cannot be undone."
+        if len(selection) > 1:
+            msg = f"Are you sure you want to delete {len(selection)} messages? This action cannot be undone."
+            
+        if not messagebox.askyesno("Confirm Delete", msg, icon='warning'):
+            return
+            
         # Delete selected messages
+        deleted_count = 0
         for index in reversed(selection):
             message_id = self.message_ids[index]
-            if delete_message(self.current_user_id, message_id):
+            if delete_message(message_id):  # Removed current_user_id parameter
                 self.messages_list.delete(index)
                 del self.message_ids[index]
+                deleted_count += 1
+        
+        # Update the display
+        self.refresh_user_list()
+        self.update_unread_count()
+        
+        # Show success message
+        if deleted_count > 0:
+            msg = f"Successfully deleted {deleted_count} message{'s' if deleted_count > 1 else ''}."
+            messagebox.showinfo("Success", msg)
     
     def on_message_select(self, event):
         """Handle message selection and mark messages as read"""
