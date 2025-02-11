@@ -99,6 +99,10 @@ class Server:
                 self.response_packet(packet_content, client_socket)
             elif opcode == 0x03:
                 pass
+            elif opcode == 0x05:
+                pass
+            elif opcode == 0x07:
+                pass
             # ... other opcodes ...
         except (ConnectionError, socket.error) as e:
             print(f"Connection error: {e}")
