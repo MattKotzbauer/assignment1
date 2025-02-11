@@ -458,7 +458,6 @@ class Server:
             full_response = response_length + response_body
             return full_response
 
-
     # 0x19: Delete Account
     def delete_account(self, packet_content: bytes) -> bytes:
         # Request (0x19):
