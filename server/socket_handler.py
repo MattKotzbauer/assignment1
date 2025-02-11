@@ -117,7 +117,7 @@ class Server:
             elif opcode == 0x05:
                 full_response = self.log_into_account(packet_content)
             elif opcode == 0x07:
-                full_response = self.log_out_account(packet_content)
+                full_response = self.log_out_of_account(packet_content)
             elif opcode == 0x09:
                 full_response = self.list_account(packet_content)
             elif opcode == 0x11:
@@ -134,7 +134,6 @@ class Server:
             if full_response: 
                 """U6: Send response packet back to client"""
                 self.response_packet(full_response, client_socket)
-
             
         except (ConnectionError, socket.error) as e:
             print(f"Connection error: {e}")
@@ -195,26 +194,113 @@ class Server:
         #   1. Length (4 bytes) of remaining packet body (here: opcode + token = 1 + 32 = 33 bytes)
         #   2. Opcode 0x04 (1 byte)
         #   3. Session token (32 bytes)
-
         response_body = bytes([0x04]) + token_bytes
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body
         return full_response
         
-        
-        
     # 0x05: Log into Account
     def log_into_account(self, packet_content: bytes) -> bytes:
-        pass
+        # Request format (Log into account):
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x05 (1 byte) - login request
+        #   3. Username length (2 bytes)
+        #   4. Username (variable length, UTF-8 encoded)
+        #   5. Hashed password (32 bytes)
+        username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+        username = packet_content[7:7+username_length].decode('utf-8')
+        hashed_password_bytes = packet_content[7+username_length:7+username_length+32] 
+        hashed_password_hex = hashed_password_bytes.hex()
+
+        user = driver.user_trie.trie.get(username)
+        if user is not None and driver.check_password(username, hashed_password_hex):
+            status = 0x00
+            token = driver.generate_session_token(user.userID)
+            token_bytes = bytes.fromhex(token)
+            unread_count = len(user.unread_messages)
+        else:
+            status = 0x01
+            token_bytes = bytes(32)
+            unread_count = 0
+
+        # Response format:
+        #   1. Length (4 bytes) of remaining packet body (here: opcode + status + token + unread = 1 + 1 + 16 + 4 = 22 bytes)
+        #   2. Opcode 0x06 (1 byte)
+        #   3. Status code (1 byte)
+        #      - 0x00: success
+        #      - 0x01: invalid credentials
+        #   4. Session token (32 bytes)
+        #   5. Unread messages count (4 bytes)
+        response_body = bytes([0x06, status]) + token_bytes + unread_count.to_bytes(4, byteorder='big')
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
         
     # 0x07: Log out of Account
-    def log_out_account(self, packet_content: bytes) -> bytes: 
-        pass
+    def log_out_of_account(self, packet_content: bytes) -> bytes: 
+        # Request format (Log out account):
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x07 (1 byte) - logout request
+        #   3. User ID (2 bytes)
+        #   4. Session token (32 bytes)
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        provided_token = packet_content[7:7+32]
+
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token:
+            stored_token_bytes = bytes.fromhex(stored_token)
+            if stored_token_bytes == provided_token:
+                del driver.session_tokens.tokens[user_id]
+                
+        # Response format:
+        #   1. Length (4 bytes) of remaining packet body (here: opcode = 1 byte)
+        #   2. Opcode 0x08 (1 byte)
+        response_body = bytes([0x08])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        print(full_response)
+        return full_response
         
     # 0x09: List Accounts
     def list_account(self, packet_content: bytes) -> bytes:
-        pass
+        # Request format (List accounts):
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x09 (1 byte)
+        #   3. User ID (2 bytes)
+        #   4. Session token (32 bytes)
+        #   5. Wildcard length (2 bytes)
+        #   6. Wildcard string (variable length, UTF-8 encoded)
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        provided_token = packet_content[5:5+32]
+        wildcard_length = int.from_bytes(packet_content[5+32:5+32+2], byteorder='big')
+        wildcard = packet_content[5+32+2:5+32+2+wildcard_length].decode('utf-8')
 
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        # authenticated = stored_token and bytes.fromhex(stored_token) == provided_token
+        # print(authenticated)
+        # matching_accounts = driver.list_accounts(wildcard) if authenticated else []
+        matching_accounts = driver.list_accounts(wildcard)
+        
+        # Response format:
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x10 (1 byte)
+        #   3. Number of matching accounts (2 bytes)
+        #   4. For each account:
+        #      - Username length (2 bytes)
+        #      - Username (variable length, UTF-8 encoded)
+        
+        count = len(matching_accounts)
+        response_body = bytes([0x10]) + count.to_bytes(2, byteorder='big')
+        
+        for username in matching_accounts:
+            username_bytes = username.encode('utf-8')
+            uname_length = len(username_bytes)
+            response_body += uname_length.to_bytes(2, byteorder='big') + username_bytes
+
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
+            
     # 0x11: Display Conversation
     def display_conversation(self, packet_content: bytes) -> bytes:
         pass

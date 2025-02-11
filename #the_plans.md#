@@ -122,7 +122,7 @@ Packet Form:
 
 General Transaction Format:
 Client sends (Create account / Login) packet to server
-* (salt + hash password before sending it over the wire)
+* (hash password before sending it over the wire)
 Server sends session token to client
 Client uses session token for all message API requests (read, send message, search for accounts, delete message, delete account
 )
@@ -176,43 +176,45 @@ Client uses session token for all message API requests (read, send message, sear
 		1. length
 		2. 0x08
 5. List accounts
-	1. Request (0x9)
+	1. Request (0x09)
 		1. length
 		2. 0x09
-		3. session token (16 bytes)
-		4. wildcard length (1 byte)
-		5. wildcard string
+		3. user ID (2 bytes)
+		4. session token (32 bytes)
+		5. wildcard length (2 byte)
+		6. wildcard string (variable-length, utf-8 encoded)
 	2. Response (0x10)
 		1. length
 		2. 0x10
 		3. count of accounts (2 bytes)
-			1. for the length of count:
-				1. username length (1 byte)
+			1. for each account:
+				1. username length (2 bytes)
 				2. username
 6. Display conversation
 	1. Request (0x11)
 		1. length
 		2. 0x11
-		3. session token (16 bytes)
-		4. user ID (2 bytes)
+		3. user ID (2 bytes)
+		4. session token (32 bytes)
 		5. conversant user ID (2 bytes)
 	2. Response (0x12)
 		1. length 
 		2. 0x12
 		3. count of messages (4 bytes)
-			1. for the length of count: 
-				1. message length (1 byte)
-				2. recipient / sender (1 byte)
+			1. for the length of count:
+			       	1. message UID (4 bytes)
+				2. message length (2 bytes)
+				3. is user recipient / sender (1 byte)
 					1. 0x00: recipient, 0x01: sender
-				3. message content (string)
+				4. message content (utf-8 string)
 7. Send message 
 	1. Request (0x13)
 		1. length
 		2. 0x13
 		3. user ID (2 bytes)
-		4. recipient ID (2 bytes)
-		5. session token (16 bytes)
-		6. message length (4 bytes)
+		4. session token (32 bytes)
+		5. recipient ID (2 bytes)
+		6. message length (2 bytes)
 		7. message content
 	2. Response (0x14)
 		1. length
@@ -221,8 +223,9 @@ Client uses session token for all message API requests (read, send message, sear
 	1. Request (0x15)
 		1. length
 		2. 0x15
-		3. session token (16 bytes)
-		4. number of desired messages (4 bytes)
+		3. user ID
+		4. session token (32 bytes)
+		5. number of desired messages (4 bytes)
 	2. Response (0x16)
 		1. length
 		2. 0x16
@@ -232,7 +235,7 @@ Client uses session token for all message API requests (read, send message, sear
 		2. 0x17
 		3. user ID (2 bytes)
 		4. message UID (4 bytes)
-		5. session token (16 bytes)
+		5. session token (32 bytes)
 	2. Response (0x18)
 		1. length
 		2. 0x18
@@ -241,7 +244,7 @@ Client uses session token for all message API requests (read, send message, sear
 		1. length
 		2. 0x19
 		3. userID
-		4. session token (16 bytes)
+		4. session token (32 bytes)
 	2. Response (0x20)
 		1. length
 		2. 0x20

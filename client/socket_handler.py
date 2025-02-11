@@ -219,8 +219,62 @@ class Client:
             raise Exception("Unexpected opcode in log_out_account")
     
     # 0x09: List Accounts
-    
-    
+    def list_accounts(self, user_id: int, session_token: str, wildcard: str) -> list[str]:
+        """
+        Opcode 0x09 (List Accounts Request) and expect a Response (0x10):
+        Request format:
+            4-byte length of following body,
+            0x09,
+            2-byte user id,
+            32-byte session token,
+            2-byte wildcard length,
+            wildcard string (UTF-8)
+        Response format:
+            4-byte total length,
+            0x10,
+            2-byte count of accounts,
+            for each account:
+                2-byte username length,
+                username (UTF-8)
+        """
+        wildcard_bytes = wildcard.encode('utf-8')
+        wildcard_length = len(wildcard_bytes)
+
+        packet_body = bytes([0x09])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += bytes.fromhex(session_token)
+        packet_body += wildcard_length.to_bytes(2, byteorder='big')
+        packet_body += wildcard_bytes
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+
+        packet = packet_length + packet_body
+        
+        response = self.send_request(packet)
+        if len(response) < 4 + 1 + 2:
+            raise Exception("Incomplete response")
+
+        opcode_resp = response[4]
+        if opcode_resp != 0x10:
+            raise Exception("Unexpected opcode in list_accounts")
+
+        account_count = int.from_bytes(response[5:7], byteorder='big')
+        usernames = []
+        pos = 7
+        
+        for _ in range(account_count):
+            if len(response) < pos + 2:
+                raise Exception("Incomplete response")
+            username_length = int.from_bytes(response[pos:pos+2], byteorder='big')
+            pos += 2
+            
+            if len(response) < pos + username_length:
+                raise Exception("Incomplete response")
+            username = response[pos:pos+username_length].decode('utf-8')
+            pos += username_length
+            usernames.append(username)
+
+        return usernames
+            
     # 0x11: Display Conversation
     
     
