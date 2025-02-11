@@ -189,9 +189,22 @@ class Client:
 
         return success, token, unread_count
         
-        
     # 0x07: Log out of Account
-    
+    def log_out_of_account(self, user_id: int, session_token: str) -> None:
+        """
+        Opcode 0x07 (Log Out Request) and expect a Response (0x08):
+        Request format:
+            4-byte length of following body,
+            0x07,
+            2-byte user id,
+            16-byte session token
+        Response format:
+            4-byte total length,
+            0x08
+        """
+        packet_body = bytes([0x07])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += bytes.fromhex(session_token)[0:16] # (Convert hex string to bytes)
     
     # 0x09: List Accounts
     
