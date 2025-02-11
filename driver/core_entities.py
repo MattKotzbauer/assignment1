@@ -48,7 +48,7 @@ class User:
         self.userID = userID
         self.username = username
         self.passwordHash = passwordHash
-        self.unreadMessages = deque()
+        self.unread_messages = deque()
         self.recent_conversants = []
 
     def add_unread_message(self, message_uid: int):
