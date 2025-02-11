@@ -10,7 +10,7 @@ from core_structures import (
     GlobalMessageBase,
     GlobalConversations
 )
-from core_entities import User
+from core_entities import User, Message
 pass
 user_base = GlobalUserBase()
 user_trie = GlobalUserTrie()
@@ -61,7 +61,7 @@ def list_accounts(wildcard_username: str) -> list[str]:
     return sorted(matching_usernames)    
 
 # FUNCTION 4
-def send_message(senderID: int, recipientID: int, message: str):
+def send_message(sender_id: int, recipient_id: int, message_content: str):
     """
     Send a message from one user to another, handling message storage and notification.
     
@@ -95,7 +95,7 @@ def send_message(senderID: int, recipientID: int, message: str):
 
     message_base.messages[message_id] = new_message
     conversation_key = tuple(sorted([sender_id, recipient_id]))
-    conversations.conversations[conversations_key].append(new_message)
+    conversations.conversations[conversation_key].append(new_message)
 
     user_base.users[sender_id].update_recent_conversant(recipient_id)
     user_base.users[recipient_id].update_recent_conversant(sender_id)
@@ -188,7 +188,7 @@ def delete_account(user_id: int):
     # 3: delete user's account from hashmap and trie
     del user_base.users[user_id]
     user_base._deleted_user_ids.add(user_id)
-    user_trie.trie.remove(user.username)
+    user_trie.trie.delete(user.username)
 
     if user_id in session_tokens.tokens:
         del session_tokens.tokens[user_id]

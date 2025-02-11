@@ -2,8 +2,9 @@
 import socket
 import selectors
 import types
-from typing import Dict, Optional
+import traceback
 import driver
+from typing import Dict, Optional
 from core_entities import Message, User
 
 class Server:
@@ -139,6 +140,7 @@ class Server:
             print(f"Connection error: {e}")
         except Exception as e:
             print(f"Error processing packet: {e}")
+            traceback.print_exc()
 
     # PACKET HANDLER CONTROL FLOW END
 
@@ -360,7 +362,7 @@ class Server:
         full_response = response_length + response_body
         
         return full_response
-        
+
     # 0x13: Send Message
     def send_message(self, packet_content: bytes) -> bytes:
         """
@@ -373,9 +375,7 @@ class Server:
             message length (2 bytes),
             message content
         """
-
-        minimum_length = 4 + 1 + 2 + 32 + 2 + 2  # At least room for header, IDs, token, message length
-        if len(packet_content) < minimum_length:
+        if len(packet_content) < 4 + 1 + 2 + 32 + 2 + 2:
             print("Send message request too short.")
             return b""
         
@@ -383,16 +383,14 @@ class Server:
         session_token = packet_content[7:7+32]
         recipient_id = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
         msg_length = int.from_bytes(packet_content[7+32+2:7+32+2+2], byteorder='big')
-        msg_start = 7+32+2+2
-        message = packet_content[msg_start:msg_start+msg_length].decode('utf-8')
+        message = packet_content[7+32+2+2:7+32+2+2+msg_length].decode('utf-8')
         
-        # Validate session token.
+        # Validate token and send message
         stored_token = driver.session_tokens.tokens.get(user_id)
         if stored_token is None or bytes.fromhex(stored_token) != session_token:
             print("Invalid session token for send message.")
         else:
             driver.send_message(user_id, recipient_id, message)
-
         """
         Response format:
             4-byte length,
@@ -400,12 +398,11 @@ class Server:
             user ID (2 bytes),
             session token (32 bytes)
         """
-        # Response (0x14): 4-byte length, 0x14 (no additional payload)
+            
         response_body = bytes([0x14])
-        response_length = len(response_body).to_bytes(4, byteorder='big')
-        full_response = response_length + response_body
-        return full_response
+        return len(response_body).to_bytes(4, byteorder='big') + response_body
     
+
     # 0x15: Read Messages
     def read_messages(self, packet_content: bytes) -> bytes:
         # Request (0x15):
@@ -452,12 +449,11 @@ class Server:
         else:
             driver.delete_message(message_uid)
             
-            # Response (0x18): 4-byte length, 0x18 (no additional payload)
-            response_body = bytes([0x18])
-            response_length = len(response_body).to_bytes(4, byteorder='big')
-            full_response = response_length + response_body
-            return full_response
-
+        # Response (0x18): 4-byte length, 0x18 (no additional payload)
+        response_body = bytes([0x18])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
 
     # 0x19: Delete Account
     def delete_account(self, packet_content: bytes) -> bytes:
@@ -477,11 +473,11 @@ class Server:
         else:
             driver.delete_account(user_id)
             
-            # Response (0x20): 4-byte length, 0x20 (no additional payload)
-            response_body = bytes([0x20])
-            response_length = len(response_body).to_bytes(4, byteorder='big')
-            full_response = response_length + response_body
-            return full_response
+        # Response (0x20): 4-byte length, 0x20 (no additional payload)
+        response_body = bytes([0x20])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
 
     # OP CODE FUNCTIONS END
        
