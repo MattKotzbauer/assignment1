@@ -195,12 +195,10 @@ class Server:
         #   1. Length (4 bytes) of remaining packet body (here: opcode + token = 1 + 32 = 33 bytes)
         #   2. Opcode 0x04 (1 byte)
         #   3. Session token (32 bytes)
-
         response_body = bytes([0x04]) + token_bytes
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body
         return full_response
-        
         
         
     # 0x05: Log into Account
