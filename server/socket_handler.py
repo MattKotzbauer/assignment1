@@ -113,12 +113,15 @@ class Server:
                 """U6: Send response packet back to client"""
                 self.response_packet(full_response, client_socket)
             elif opcode == 0x03:
-                pass
+                full_response = self.create_account(packet_content)
             elif opcode == 0x05:
                 pass
             elif opcode == 0x07:
                 pass
             # ... TODO: next opcodes ...
+            self.response_packet(full_response, client_socket)
+
+            
         except (ConnectionError, socket.error) as e:
             print(f"Connection error: {e}")
         except Exception as e:
@@ -158,7 +161,66 @@ class Server:
         full_response = response_length + response_body
         return full_response
             
-    # 0x03: ...
+    # 0x03: Create Account
+    def create_account(self, packet_content: bytes) -> bytes:
+        # Request format (Create account):
+        #   1. Length (4 bytes) of remaining packet body
+        #   2. Opcode 0x03 (1 byte) - create account request
+        #   3. Username length (2 bytes)
+        #   4. Username (variable length, UTF-8 encoded)
+        #   5. Hashed password (32 bytes)
+        username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+        username = packet_content[7:7+username_length].decode('utf-8')
+        hashed_password_bytes = packet_content[7+username_length:7+username_length+32]
+        hashed_password_hex = hashed_password_bytes.hex()
+
+        token = driver.create_account(username, hashed_password_hex)
+        token_bytes = bytes.fromhex(token)
+
+        # Response format:
+        #   1. Length (4 bytes) of remaining packet body (here: opcode + token = 1 + 32 = 33 bytes)
+        #   2. Opcode 0x04 (1 byte)
+        #   3. Session token (32 bytes)
+
+        response_body = bytes([0x04]) + token_bytes
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
+        
+        
+        
+    # 0x05: Log into Account
+    def log_into_account(self, packet_content: bytes) -> bytes:
+        pass
+        
+    # 0x07: Log out of Account
+    def log_out_account(self, packet_content: bytes) -> bytes: 
+        pass
+        
+    # 0x09: List Accounts
+    def list_account(self, packet_content: bytes) -> bytes:
+        pass
+
+    # 0x11: Display Conversation
+    def display_conversation(self, packet_content: bytes) -> bytes:
+        pass
+    
+    # 0x13: Send Message
+    def send_message(self, packet_content: bytes) -> bytes:
+        pass
+    
+    # 0x15: Read Messages
+    def read_messages(self, packet_content: bytes) -> bytes:
+        pass
+    
+    # 0x17: Delete Message
+    def delete_message(self, packet_content: bytes) -> bytes:
+        pass
+    
+    # 0x19: Delete Account
+    def delete_account(self, packet_content: bytes) -> bytes:
+        pass
+    
     # OP CODE FUNCTIONS END
        
     
