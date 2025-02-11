@@ -345,122 +345,149 @@ class Client:
             
             messages.append((msg_id, msg_content, is_sender))
             
-            return messages
-    
+        return messages
+
     # 0x13: Send Message
-    def send_message(self, user_id: int, session_token: bytes, recipient_id: int, message: str) -> None:
+    def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> None:
         """
-        Sends a message from the user to a recipient.
-        Request (0x13):
-          - 4-byte total length, opcode (0x13)
+        Opcode 0x13 (Send Message Request); expects a Response (0x14).
+
+        Request format:
+          - 4-byte total length
+          - 0x13
           - user ID (2 bytes)
-          - session token (32 bytes)
+          - session token (32 bytes, hex string on client side -> raw bytes on wire)
           - recipient ID (2 bytes)
           - message length (2 bytes)
-          - message content (UTF-8 encoded)
-        Response (0x14):
-          - 4-byte total length, opcode (0x14)
+          - message content (UTF-8)
+          
+        Response format:
+          - 4-byte total length
+          - 0x14
         """
-        # Ensure session token is exactly 32 bytes.
-        if len(session_token) != 32:
-            raise ValueError("Session token must be 32 bytes")
-            
-        user_id_bytes = user_id.to_bytes(2, byteorder='big')
-        recipient_id_bytes = recipient_id.to_bytes(2, byteorder='big')
-        message_bytes = message.encode('utf-8')
-        message_length_bytes = len(message_bytes).to_bytes(2, byteorder='big')
+        token_bytes = bytes.fromhex(session_token)
+        if len(token_bytes) != 32:
+            raise ValueError("Decoded session token must be 32 bytes")
 
-        # Assemble the payload.
-        payload = user_id_bytes + session_token + recipient_id_bytes + message_length_bytes + message_bytes
-        packet = self.build_packet(0x13, payload)
+        packet_body = bytes([0x13])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += token_bytes
+        packet_body += recipient_id.to_bytes(2, byteorder='big')
+
+        message_bytes = message.encode('utf-8')
+        packet_body += len(message_bytes).to_bytes(2, byteorder='big')
+        packet_body += message_bytes
+        
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        packet = packet_length + packet_body
 
         response = self.send_request(packet)
-        # Check that response has at least the header (4 bytes) plus opcode (1 byte)
         if len(response) < 5:
             raise Exception("Incomplete response for send_message")
         if response[4] != 0x14:
             raise Exception(f"Unexpected opcode in send_message response: {response[4]:#04x}")
-        # Success (no further payload)
-    
+
     # 0x15: Read Messages
-    def read_messages(self, user_id: int, session_token: bytes, num_messages: int) -> None:
+    def read_messages(self, user_id: int, session_token: str, num_messages: int) -> None:
         """
-        Requests that a number of unread messages be marked as read.
-        Request (0x15):
-          - 4-byte total length, opcode (0x15)
+        Opcode 0x15 (Read Messages); expects a Response (0x16).
+
+        Request format:
+          - 4-byte total length
+          - 0x15
           - user ID (2 bytes)
-          - session token (32 bytes)
+          - session token (32 bytes, hex -> raw)
           - number of desired messages (4 bytes)
-        Response (0x16):
-          - 4-byte total length, opcode (0x16)
+          
+        Response format:
+          - 4-byte total length
+          - 0x16
         """
-        if len(session_token) != 32:
-            raise ValueError("Session token must be 32 bytes")
-            
-        user_id_bytes = user_id.to_bytes(2, byteorder='big')
-        num_messages_bytes = num_messages.to_bytes(4, byteorder='big')
-        payload = user_id_bytes + session_token + num_messages_bytes
-        packet = self.build_packet(0x15, payload)
+        token_bytes = bytes.fromhex(session_token)
+        if len(token_bytes) != 32:
+            raise ValueError("Decoded session token must be 32 bytes")
+
+        packet_body = bytes([0x15])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += token_bytes
+        packet_body += num_messages.to_bytes(4, byteorder='big')
+
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        packet = packet_length + packet_body
 
         response = self.send_request(packet)
         if len(response) < 5:
             raise Exception("Incomplete response for read_messages")
         if response[4] != 0x16:
             raise Exception(f"Unexpected opcode in read_messages response: {response[4]:#04x}")
-        # Success
-    
+
     # 0x17: Delete Message
-    def delete_message(self, user_id: int, message_uid: int, session_token: bytes) -> None:
+    def delete_message(self, user_id: int, message_uid: int, session_token: str) -> None:
         """
-        Requests deletion of a message.
-        Request (0x17):
-          - 4-byte total length, opcode (0x17)
+        Opcode 0x17 (Delete Message); expects a Response (0x18).
+
+        Request format:
+          - 4-byte total length
+          - 0x17
           - user ID (2 bytes)
           - message UID (4 bytes)
-          - session token (32 bytes)
-        Response (0x18):
-          - 4-byte total length, opcode (0x18)
+          - session token (32 bytes, hex -> raw)
+          
+        Response format:
+          - 4-byte total length
+          - 0x18
         """
-        if len(session_token) != 32:
-            raise ValueError("Session token must be 32 bytes")
-            
-        user_id_bytes = user_id.to_bytes(2, byteorder='big')
-        message_uid_bytes = message_uid.to_bytes(4, byteorder='big')
-        payload = user_id_bytes + message_uid_bytes + session_token
-        packet = self.build_packet(0x17, payload)
+        token_bytes = bytes.fromhex(session_token)
+        if len(token_bytes) != 32:
+            raise ValueError("Decoded session token must be 32 bytes")
+
+        packet_body = bytes([0x17])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += message_uid.to_bytes(4, byteorder='big')
+        packet_body += token_bytes
+
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        packet = packet_length + packet_body
 
         response = self.send_request(packet)
         if len(response) < 5:
             raise Exception("Incomplete response for delete_message")
         if response[4] != 0x18:
             raise Exception(f"Unexpected opcode in delete_message response: {response[4]:#04x}")
-        # Success
-        
+
     # 0x19: Delete Account
-    def delete_account(self, user_id: int, session_token: bytes) -> None:
+    def delete_account(self, user_id: int, session_token: str) -> None:
         """
-        Requests deletion of the user account.
-        Request (0x19):
-          - 4-byte total length, opcode (0x19)
+        Opcode 0x19 (Delete Account); expects a Response (0x20).
+
+        Request format:
+          - 4-byte total length
+          - 0x19
           - user ID (2 bytes)
-          - session token (32 bytes)
-        Response (0x20):
-          - 4-byte total length, opcode (0x20)
+          - session token (32 bytes, hex -> raw)
+          
+        Response format:
+          - 4-byte total length
+          - 0x20
         """
-        if len(session_token) != 32:
-            raise ValueError("Session token must be 32 bytes")
-            
-        user_id_bytes = user_id.to_bytes(2, byteorder='big')
-        payload = user_id_bytes + session_token
-        packet = self.build_packet(0x19, payload)
+        token_bytes = bytes.fromhex(session_token)
+        if len(token_bytes) != 32:
+            raise ValueError("Decoded session token must be 32 bytes")
+
+        packet_body = bytes([0x19])
+        packet_body += user_id.to_bytes(2, byteorder='big')
+        packet_body += token_bytes
+
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        packet = packet_length + packet_body
 
         response = self.send_request(packet)
         if len(response) < 5:
             raise Exception("Incomplete response for delete_account")
         if response[4] != 0x20:
             raise Exception(f"Unexpected opcode in delete_account response: {response[4]:#04x}")
-        # Success
-    
+
+        
     # OP CODE FUNCTIONS END
 
         
