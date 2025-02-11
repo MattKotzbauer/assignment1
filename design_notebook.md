@@ -46,3 +46,13 @@ Thinking about the shape of our packet is something I want to do carefully since
     3. Server sends all such things back to client to display
        * (perhaps both (A) at start of session and (B) whenever there's an update in state concerning the (client, sender ID pair), the server updates the messages that it shows to both clients)
        	 * (or perhaps there's an event listener on the side of the GUI that re-queries the database when this occurs? Or perhaps we only need to append the most recent message)
+
+02/11/2025:
+- Working on the GUI functions specifically, I initally ran into a lot of tkinter formatting and display issues that needed to be fixed. I made decent progress on this and ended up with this kind of interface that implements all of the basic functions within the GUI:
+  - Create account / login where it would automatically ask the user if they wanted to create a new account if they log in with a non existing account
+  - Read messages from a single user
+  - Send messages to a single user
+  - Deleting messages where the user can delete any message, both sent and received and click and unclick to select which messages to delete.
+  - An "unread messages" section in read where the user can see which messages haven't been read yet, how many they are, from which user it is, and it automatically updates to 'read' when the user reads the message. Ths makes it easier for the user to mark messages as read, since they don't need to manually click a message "read" after they've already read it themselves.
+  - Delete account and all associated messages, especially with unread messages. Still unsure what "semantically" deleting an account means, but I added an "are you sure?" prompt in the GUI and a warning of what deleting the account would do. When the account is deleted, also it allows us to reuse the account ID for future accounts.
+  - Other confirmation dialogue in places to prevent accidental deletion of messages or accounts and clear feedback of consequences when deleting.
