@@ -35,7 +35,7 @@ def test_login_logout_flow():
         # Note: In a real implementation, you'd get the user_id from somewhere
         # For testing, we can use a dummy value like 1
         user_id = 1
-        client.log_out_of_account(user_id, token)
+        client.log_out_account(user_id, token)
         print(f"\nTest 3 - Logout successful")
         
         client.disconnect()

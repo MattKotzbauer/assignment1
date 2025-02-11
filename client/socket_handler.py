@@ -174,7 +174,6 @@ class Client:
         packet_length = len(packet_body).to_bytes(4, byteorder='big')
 
         packet = packet_length + packet_body
-
         response = self.send_request(packet)
         
         if len(response) < 4 + 1 + 1 + 32 + 4:
