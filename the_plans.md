@@ -88,6 +88,10 @@ Operations:
    (c.ii.) if receiver is not logged in: set hasBeenRead to false and add Message UID to receiver's unreadMessages queue
 5. Read messages
    - Input: number of new messages to be read
+   (a) repeat this cycle for the number of new messages within unreadMessages:
+       * take the most recent new message, and mark it as 'has been read'
+       	 * (this will allow the user to see it in th GUI)
+	 
 6.a. Delete message
    - Input: UID of Message instance
    (a) remove from GlobalMessageBase
@@ -123,56 +127,123 @@ Server sends session token to client
 Client uses session token for all message API requests (read, send message, search for accounts, delete message, delete account
 )
 
-Old Format (TODO: refine for new types):
-```
-CREATE ACCOUNT:
-Request (0x01)
-[ Length | 0x01 | username_length (1 byte) | username | password_hash (32 bytes) ]
-Response (0x02)
-[ Length | 0x02 | status_code (1 byte) | session_token (16 bytes) ]
-Status codes: 0x00 (success), 0x01 (name taken), 0x02 (invalid name)
 
-LOGIN:
-Request (0x03)
-[ Length | 0x03 | username_length (1 byte) | username | password_hash (32 bytes) ]
-Response (0x04)
-[ Length | 0x04 | status_code (1 byte) | session_token (16 bytes) | unread_count (4 bytes) ]
-Status codes: 0x00 (success), 0x01 (invalid credentials)
 
-LIST ACCOUNTS:
-Request (0x05)
-[ Length | 0x05 | pattern_length (1 byte) | pattern | offset (4 bytes) | limit (2 bytes) ]
-Response (0x06)
-[ Length | 0x06 | count (2 bytes) | total_matches (4 bytes) | username_entries[] ]
-Username entry: [ length (1 byte) | username ]
+1. Enter username
+	1. Request (0x01)
+		1. length (4 bytes)
+		2. 0x01
+		3. username length (2 bytes)
+		4. username
+	2. Response (0x02)
+		1. status code (1 byte)
+			1. 0x00 (name untaken, send 0x03 request), 0x01 (name taken, send 0x05 request)
+2. Create account
+	1. Request (0x03)
+		1. length (2 bytes)
+		2. 0x03
+		3. username length (2 bytes)
+		4. username
+		5. hashed password (32 bytes)
+	2. Response (0x04)
+		1. length
+		2. 0x04
+		3. session token (32 bytes)
+3. Log into account
+	1. Request (0x05)
+		1. length
+		2. 0x05
+		3. username length
+		4. username
+		5. hashed password (32 bytes)
+	2. Response (0x06)
+		1. length
+		2. 0x06
+		3. status code (1 byte)
+			1. 0x00 (success)
+			2. 0x01 (invalid credentials)
+		4. session token (16 bytes)
+		5. unread messages count (4 bytes)
+4. Log out of account
+	1. Request (0x07)
+		1. length
+		2. 0x07
+		3. user id (2 bytes)
+		4. session token (16 bytes)
+	2. Response (0x08)
+		1. length
+		2. 0x08
+5. List accounts
+	1. Request (0x9)
+		1. length
+		2. 0x09
+		3. session token (16 bytes)
+		4. wildcard length (1 byte)
+		5. wildcard string
+	2. Response (0x10)
+		1. length
+		2. 0x10
+		3. count of accounts (2 bytes)
+			1. for the length of count:
+				1. username length (1 byte)
+				2. username
+6. Display conversation
+	1. Request (0x11)
+		1. length
+		2. 0x11
+		3. session token (16 bytes)
+		4. user ID (2 bytes)
+		5. conversant user ID (2 bytes)
+	2. Response (0x12)
+		1. length 
+		2. 0x12
+		3. count of messages (4 bytes)
+			1. for the length of count: 
+				1. message length (1 byte)
+				2. recipient / sender (1 byte)
+					1. 0x00: recipient, 0x01: sender
+				3. message content (string)
+7. Send message 
+	1. Request (0x13)
+		1. length
+		2. 0x13
+		3. user ID (2 bytes)
+		4. recipient ID (2 bytes)
+		5. session token (16 bytes)
+		6. message length (4 bytes)
+		7. message content
+	2. Response (0x14)
+		1. length
+		2. 0x14
+8. Read messages
+	1. Request (0x15)
+		1. length
+		2. 0x15
+		3. session token (16 bytes)
+		4. number of desired messages (4 bytes)
+	2. Response (0x16)
+		1. length
+		2. 0x16
+9. Delete message
+	1. Request (0x17)
+		1. length
+		2. 0x17
+		3. user ID (2 bytes)
+		4. message UID (4 bytes)
+		5. session token (16 bytes)
+	2. Response (0x18)
+		1. length
+		2. 0x18
+10. Delete account
+	1. Request (0x19)
+		1. length
+		2. 0x19
+		3. userID
+		4. session token (16 bytes)
+	2. Response (0x20)
+		1. length
+		2. 0x20
 
-SEND MESSAGE:
-Request (0x07)
-[ Length | 0x07 | recipient_length (1 byte) | recipient | message_length (2 bytes) | message ]
-Response (0x08)
-[ Length | 0x08 | status_code (1 byte) | message_id (8 bytes) ]
-Status codes: 0x00 (delivered), 0x01 (queued), 0x02 (user not found)
-
-READ MESSAGES:
-Request (0x09)
-[ Length | 0x09 | max_messages (2 bytes) ]
-Response (0x0A)
-[ Length | 0x0A | message_count (2 bytes) | messages[] ]
-Message: [ message_id (8 bytes) | sender_length (1 byte) | sender | message_length (2 bytes) | message ]
-
-DELETE MESSAGES:
-Request (0x0B)
-[ Length | 0x0B | message_count (2 bytes) | message_ids[] ]
-Message_ids: [ message_id (8 bytes) ]
-Response (0x0C)
-[ Length | 0x0C | status_code (1 byte) | deleted_count (2 bytes) ]
-
-DELETE ACCOUNT:
-Request (0x0D)
-[ Length | 0x0D | password_hash (32 bytes) ]
-Response (0x0E)
-[ Length | 0x0E | status_code (1 byte) ]
-Status codes: 0x00 (success), 0x01 (auth failed)
 ```
 
 

@@ -1,0 +1,68 @@
+import socket
+import selectors
+import types
+
+HOST = '127.0.0.1'
+PORT = 65432
+
+sel = selectors.DefaultSelector()
+
+def handle_packet(packet_bytes: str):
+    """Process received packet data"""
+    print(f"Server received: {packet_bytes}")
+    return f"Server processed: {packet_bytes}"
+
+def send_packet(packet_bytes: str, sock):
+    """Send packet to client"""
+    try:
+        encoded_data = packet_bytes.encode('utf-8')
+        sock.send(encoded_data)
+    except Exception as e:
+        print(f"Error sending packet: {e}")
+
+def accept_wrapper(sock):
+    conn, addr = sock.accept()
+    print(f"Connected by {addr}")
+    conn.setblocking(False)
+    data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
+    events = selectors.EVENT_READ | selectors.EVENT_WRITE
+    sel.register(conn, events, data=data)
+
+def service_connection(key, mask):
+    sock = key.fileobj
+    data = key.data
+
+    if mask & selectors.EVENT_READ:
+        recv_data = sock.recv(1024)
+        if recv_data:
+            data.outb += recv_data
+            response = handle_packet(recv_data.decode('utf-8'))
+            send_packet(response, sock)
+        else:
+            print(f"Closing connection to {data.addr}")
+            sel.unregister(sock)
+            sock.close()
+
+if __name__ == "__main__":
+    lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    lsock.bind((HOST, PORT))
+    lsock.listen()
+    print(f"Listening on {(HOST, PORT)}")
+    lsock.setblocking(False)
+    sel.register(lsock, selectors.EVENT_READ, data=None)
+
+    try:
+        while True:
+            events = sel.select(timeout=None)
+            for key, mask in events:
+                if key.data is None:
+                    accept_wrapper(key.fileobj)
+                else:
+                    service_connection(key, mask)
+    except KeyboardInterrupt:
+        print("Server shutting down")
+    finally:
+        sel.close()
+        lsock.close()
+
+        
