@@ -248,7 +248,7 @@ def delete_account(user_id: int) -> bool:
         user = user_base.users[user_id]
         
         # Delete unread messages
-        for unread_message_uid in user.unread_messages:
+        for unread_message_uid in user.unreadMessages:
             delete_message(unread_message_uid)
         
         # Delete all conversations involving user
@@ -259,7 +259,7 @@ def delete_account(user_id: int) -> bool:
                 del conversations.conversations[conv_key]
         
         # Remove from trie
-        user_trie.trie.remove(user.username)
+        user_trie.trie.delete(user.username)
         
         # Remove from user base
         del user_base.users[user_id]

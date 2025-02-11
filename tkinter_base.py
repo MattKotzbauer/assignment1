@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'driver'))
 from driver.driver import (
     create_account, check_password, list_accounts,
     send_message, read_messages as mark_messages_as_read, delete_message, generate_session_token,
-    hash_password, user_base, user_trie, conversations, message_base
+    hash_password, user_base, user_trie, conversations, message_base, delete_account
 )
 from driver.core_entities import Message, User
 
@@ -146,12 +146,19 @@ class ChatInterface:
             self.create_message_area() # Center panel (row=1)
             self.create_input_area()   # Bottom panel (row=2)
             
+            # Create a frame for buttons
+            button_frame = ttk.Frame(self.main_frame)
+            button_frame.grid(row=3, column=0, pady=5)
+            
             # Add logout button
-            ttk.Button(self.main_frame, text="Logout", command=self.handle_logout).grid(row=3, column=0, pady=5)
+            ttk.Button(button_frame, text="Logout", command=self.handle_logout).grid(row=0, column=0, padx=2)
+            
+            # Add delete account button
+            ttk.Button(button_frame, text="Delete Account", command=self.handle_delete_account).grid(row=0, column=1, padx=2)
     
             # Refresh user list and messages
             self.refresh_user_list()
-            self.read_messages()
+            self.display_messages()
             self.update_unread_count()
             self.root.update()
             
@@ -267,6 +274,27 @@ class ChatInterface:
         self.current_user_id = None
         self.current_token = None
         self.show_login_screen()
+        
+    def handle_delete_account(self):
+        """Handle the deletion of the current user's account"""
+        # Confirm deletion
+        if not messagebox.askyesno(
+            "Delete Account",
+            "Are you sure you want to delete your account? This action cannot be undone.\n\n" +
+            "This will:\n" +
+            "- Delete all your messages (sent and received)\n" +
+            "- Remove all your conversations\n" +
+            "- Delete your account permanently",
+            icon='warning'
+        ):
+            return
+            
+        # Delete the account
+        if delete_account(self.current_user_id):
+            messagebox.showinfo("Success", "Your account has been deleted successfully.")
+            self.handle_logout()  # Logout after deletion
+        else:
+            messagebox.showerror("Error", "Failed to delete account. Please try again.")
         
     def create_user_list(self):
         """Creates the left panel containing the list of online users"""
