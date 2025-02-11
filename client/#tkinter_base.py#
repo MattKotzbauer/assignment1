@@ -7,15 +7,14 @@ import sys
 import hashlib
 
 # Add the driver directory to Python path
-# sys.path.append(os.path.join(os.path.dirname(__file__), 'driver'))
-sys.path.append(os.path.join(os.path.dirname(__file__), 'server'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'driver'))
 
-from server.driver import (
+from driver.driver import (
     create_account, check_password, list_accounts,
     send_message, read_messages as mark_messages_as_read, delete_message, generate_session_token,
     hash_password, user_base, user_trie, conversations, message_base, delete_account
 )
-from server.core_entities import Message, User
+from driver.core_entities import Message, User
 
 def get_username_by_id(user_id: int) -> str:
     """Get username by user ID"""
