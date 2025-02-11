@@ -109,7 +109,8 @@ class Server:
             opcode = packet_content[4]
             
             if opcode == 0x01: 
-                full_response = search_username(packet_content)
+                full_response = self.search_username(packet_content)
+                """U6: Send response packet back to client"""
                 self.response_packet(full_response, client_socket)
             elif opcode == 0x03:
                 pass
@@ -128,18 +129,20 @@ class Server:
     # OP CODE FUNCTIONS START
     
     # 0x01: Search Username
-    def search_username(self, request_content: bytes) -> bytes:
+    def search_username(self, packet_content: bytes) -> bytes:
         # Request format (Enter username):
         #   1. Length (4 bytes) of remaining packet body
         #   2. Opcode 0x01 (1 byte) - enter username request
         #   3. Username length (2 bytes)
         #   4. Username (variable length, UTF-8 encoded)
         """
-        3. cast wire protocol packet into API function inputs)
+        U3. Cast wire protocol packet into API function inputs)
+            * (note that our op code dictates which function we send the packet bytes into, which dictates
+                   the fields that we process as input)
         """
-        
         username_length = int.from_bytes(packet_content[5:7], byteorder='big')
         username = packet_content[7:7+username_length].decode('utf-8')
+        """U4: Call server-side API function using input values"""
         user_exists = driver.user_trie.trie.get(username) is not None
         status = 0x01 if user_exists else 0x00
         print(f"Username '{username}' exists: {user_exists}. Sending status code {status:#04x}.")
@@ -149,6 +152,7 @@ class Server:
         #   3. Status code (1 byte)
         #      - 0x00: username is available (client should send 0x03 register request)
         #      - 0x01: username is taken (client should send 0x05 login request)
+        """U5: Cast API function output values into wire protocol packet"""
         response_body = bytes([0x02, status])
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body

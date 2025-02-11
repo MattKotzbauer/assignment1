@@ -69,7 +69,7 @@ class Client:
         """
         Opcode 0x01 (Enter Username Request) and expect a Response (0x02):
           Request format:
-            4-byte total length,
+            4-byte length of following body,
             0x01,
             2-byte username length,
             username (UTF-8)
@@ -80,23 +80,35 @@ class Client:
               0x00 => name untaken (client should send a 0x03 request)
               0x01 => name taken (client should send a 0x05 request)
         """
+        # U1: Cast input into wire protocol packet
         username_bytes = username.encode('utf-8')
         username_length = len(username_bytes)
-        payload = username_length.to_bytes(2, byteorder='big') + username_bytes
+
+        packet_body = bytes([0x01])
+        packet_body += username_length.to_bytes(2, byteorder='big')
+        packet_body += username_bytes
+
+        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        
+        packet = packet_length + packet_body
+        # payload = username_length.to_bytes(2, byteorder='big') + username_bytes
+        # U2: Send request packet to server
         response = self.send_request(packet)
         if len(response) < 4 + 1 + 1:
             raise Exception("Incomplete response")
-
+        
         opcode_resp = response[4]
         if opcode_resp != 0x02:
             raise Exception("Unexpected opcode in search_username")
 
+        # U7: Cast packet from server into function output type
         status = response[5]
-        return status = 0x00
+        return status == 0x00
         
 
     # 0x03: 
-    
+
+    # OP CODE FUNCTIONS END
 
         
 if __name__ == "__main__":
