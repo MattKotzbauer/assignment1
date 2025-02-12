@@ -11,7 +11,7 @@ from core_entities import Message, User
 
 class Server:
     # GENERAL-FORM SOCKET FN's START
-    def __init__(self, host: str = "127.0.0.1", port: int = 65432):
+    def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
         self.sel = selectors.DefaultSelector()
@@ -1014,8 +1014,8 @@ class Server:
     # ----------------------------------------------------- 
 
 if __name__ == "__main__":
-    host = "127.0.0.1"
-    port = 65432
+    # host = "127.0.0.1"
+    # port = 65432
     
     args = sys.argv[1:]
     if len(args) >= 1:
