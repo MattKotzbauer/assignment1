@@ -113,10 +113,24 @@ Two implementations are supported:
 ### Project Structure
 ```
 ./
-├── client/           # Client implementation
-├── server/           # Server implementation
-├── test_*.py         # Test files
-└── tkinter_base.py   # GUI implementation
+├── server/                     # Server-side
+│   └── socket_handler.py       # Server socket management and message handling
+│
+├── client/                     # Client-side 
+│   └── socket_handler.py       # Client socket management and message handling
+│
+├── auxiliary_data_structures/  # Helper data structures
+│   └── ...                     # Utility classes and functions; helpers
+│
+├── driver/                     # Main application logic
+│   ├── message_driver.py       # Message handling and routing
+│   ├── user_driver.py          # User management and authentication
+│   └── ...                     # Other functionality
+│
+├── tkinter_base.py            # GUI implementation using Tkinter
+├── test_tkinter_base.py       # GUI unit tests
+├── design_notebook.md         # Design decisions and implementation notes
+└── the_plans.md               # Project planning and requirements
 ```
 
 ### Running Tests
