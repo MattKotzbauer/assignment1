@@ -4,12 +4,14 @@ import socket
 from typing import Optional
 import time
 import hashlib
+import json
 
 class Client:
     # GENERAL-FORM SOCKET FN's START
-    def __init__(self, host: str = "127.0.0.1", port: int = 65432):
+    def __init__(self, host: str = "127.0.0.1", port: int = 65432, use_json: bool = False):
         self.host = host
         self.port = port
+        self.use_json = use_json
         self.sock: Optional[socket.socket] = None
         self._connected = False
 
@@ -74,6 +76,13 @@ class Client:
         body = bytes([opcode]) + payload
         length_header = len(body).to_bytes(4, byteorder='big')
         return length_header + body
+
+    def build_json_packet(self, data: dict) -> bytes:
+        """Build a JSON protocol packet using a length header and JSON body."""
+        json_data = json.dumps(data).encode('utf-8')
+        length_header = len(json_data).to_bytes(4, byteorder='big')
+        return length_header + json_data        
+
     # GENERAL-FORM SOCKET FN's END
 
     # OP CODE FUNCTIONS START
@@ -81,44 +90,40 @@ class Client:
     # 0x01: Search Username
     def search_username(self, username: str) -> bool:
         """
-        Opcode 0x01 (Enter Username Request) and expect a Response (0x02):
-          Request format:
-            4-byte length of following body,
-            0x01,
-            2-byte username length,
-            username (UTF-8)
-          Response format:
-            4-byte total length,
-            0x02,
-            1-byte status code
-              0x00 => name untaken (client should send a 0x03 request)
-              0x01 => name taken (client should send a 0x05 request)
+        In binary mode:
+          Request: 4-byte length, 0x01, 2-byte username length, username (UTF-8)
+          Response: 4-byte length, 0x02, 1-byte status code (0x00 means available)
+          
+        In JSON mode:
+          Request: { "opcode": "search_username", "username": <username> }
+          Response: { "opcode": "search_username_response", "available": true/false }
         """
-        # U1: Cast input into wire protocol packet
-        username_bytes = username.encode('utf-8')
-        username_length = len(username_bytes)
+        if self.use_json:
+            # Build JSON packet
+            packet = self.build_json_packet({
+                "opcode": "search_username",
+                "username": username
+            })
+            response = self.send_request(packet)
+            # Assume the first 4 bytes are the length; the rest is a JSON string.
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            return response_data.get("available", False)
+        else:
+            # Custom Wire Protocol Packet
+            username_bytes = username.encode('utf-8')
+            username_length = len(username_bytes)
+            packet_body = bytes([0x01]) + username_length.to_bytes(2, byteorder='big') + username_bytes
+            packet = len(packet_body).to_bytes(4, byteorder='big') + packet_body
+            response = self.send_request(packet)
+            if len(response) < 6:
+                raise Exception("Incomplete response")
+            opcode_resp = response[4]
+            if opcode_resp != 0x02:
+                raise Exception("Unexpected opcode in search_username")
+            status = response[5]
+            return status == 0x00
 
-        packet_body = bytes([0x01])
-        packet_body += username_length.to_bytes(2, byteorder='big')
-        packet_body += username_bytes
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        
-        packet = packet_length + packet_body
-        # payload = username_length.to_bytes(2, byteorder='big') + username_bytes
-        # U2: Send request packet to server
-        response = self.send_request(packet)
-        if len(response) < 4 + 1 + 1:
-            raise Exception("Incomplete response")
-        
-        opcode_resp = response[4]
-        if opcode_resp != 0x02:
-            raise Exception("Unexpected opcode in search_username")
-
-        # U7: Cast packet from server into function output type
-        status = response[5]
-        return status == 0x00
-        
     # 0x03: Create Account
     def create_account(self, username: str, password: str) -> str: 
         """

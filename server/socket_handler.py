@@ -4,6 +4,8 @@ import selectors
 import types
 import traceback
 import driver
+import json
+import sys
 from typing import Dict, Optional
 from core_entities import Message, User
 
@@ -106,41 +108,64 @@ class Server:
 
             # packet_length: denotes length of remaining packet content
             packet_length = int.from_bytes(packet_content[0:4], byteorder='big')
-            # opcode: denotes type of request
-            opcode = packet_content[4]
 
             full_response = None
+
+            if packet_content[4:5] == b'{':
+                # JSON Mode
+                try:
+                    # Decode the JSON string (everything after the 4-byte header)
+                    json_str = packet_content[4:].decode('utf-8')
+                    request = json.loads(json_str)
             
-            if opcode == 0x01: 
-                full_response = self.search_username(packet_content)
-            elif opcode == 0x03:
-                full_response = self.create_account(packet_content)
-            elif opcode == 0x05:
-                full_response = self.log_into_account(packet_content)
-            elif opcode == 0x07:
-                full_response = self.log_out_of_account(packet_content)
-            elif opcode == 0x09:
-                full_response = self.list_account(packet_content)
-            elif opcode == 0x11:
-                full_response = self.display_conversation(packet_content)
-            elif opcode == 0x13:
-                full_response = self.send_message(packet_content)
-            elif opcode == 0x15:
-                full_response = self.read_messages(packet_content)
-            elif opcode == 0x17:
-                full_response = self.delete_message(packet_content)
-            elif opcode == 0x19:
-                full_response = self.delete_account(packet_content)
-            elif opcode == 0x21:
-                full_response = self.get_unread_messages(packet_content)
-            elif opcode == 0x23:
-                full_response = self.get_message_info(packet_content)
-            elif opcode == 0x25:
-                full_response = self.get_username_by_id(packet_content)
-            elif opcode == 0x27:
-                full_response = self.mark_message_as_read(packet_content)
-            elif opcode == 0x29:
-                full_response = self.get_user_by_username(packet_content)
+                    # Dispatch based on the "opcode" field in the JSON object.
+                    opcode = request.get("opcode")
+                    if opcode == "search_username":
+                        response_data = self.search_username_json(request)
+                        # Convert the response back to JSON and prepend the length header.
+                    elif opcode == "foo":
+                        pass
+                        
+                    response_json = json.dumps(response_data).encode('utf-8')
+                    response_packet = len(response_json).to_bytes(4, byteorder='big') + response_json
+                    self.response_packet(response_packet, client_socket)
+
+                except Exception as e:
+                    print(f"Error processing JSON packet: {e}")
+            else:
+                # Opcode: denotes type of request
+                opcode = packet_content[4]
+                # Custom Wire Protocol Mode: interpret op_code
+                if opcode == 0x01: 
+                    full_response = self.search_username(packet_content)
+                elif opcode == 0x03:
+                    full_response = self.create_account(packet_content)
+                elif opcode == 0x05:
+                    full_response = self.log_into_account(packet_content)
+                elif opcode == 0x07:
+                    full_response = self.log_out_of_account(packet_content)
+                elif opcode == 0x09:
+                    full_response = self.list_account(packet_content)
+                elif opcode == 0x11:
+                    full_response = self.display_conversation(packet_content)
+                elif opcode == 0x13:
+                    full_response = self.send_message(packet_content)
+                elif opcode == 0x15:
+                    full_response = self.read_messages(packet_content)
+                elif opcode == 0x17:
+                    full_response = self.delete_message(packet_content)
+                elif opcode == 0x19:
+                    full_response = self.delete_account(packet_content)
+                elif opcode == 0x21:
+                    full_response = self.get_unread_messages(packet_content)
+                elif opcode == 0x23:
+                    full_response = self.get_message_info(packet_content)
+                elif opcode == 0x25:
+                    full_response = self.get_username_by_id(packet_content)
+                elif opcode == 0x27:
+                    full_response = self.mark_message_as_read(packet_content)
+                elif opcode == 0x29:
+                    full_response = self.get_user_by_username(packet_content)
                 
             if full_response: 
                 """U6: Send response packet back to client"""
@@ -154,7 +179,18 @@ class Server:
 
     # PACKET HANDLER CONTROL FLOW END
 
-    # OP CODE FUNCTIONS START
+    # CUSTOM PROTOCOL JSON-BASED FUNCTIONS START
+    def search_username_json(self, request: dict) -> dict:
+        username = request.get("username", "")
+        user_exists = driver.user_trie.trie.get(username) is not None
+        available = not user_exists
+        print(f"[JSON] Username '{username}' exists: {user_exists}. Responding with available={available}")
+        return {
+            "opcode": "search_username_response",
+            "available": available
+    }
+    
+    # CUSTOM PROTOCOL OP CODE FUNCTIONS START
     
     # 0x01: Search Username
     def search_username(self, packet_content: bytes) -> bytes:
@@ -411,7 +447,6 @@ class Server:
             
         response_body = bytes([0x14])
         return len(response_body).to_bytes(4, byteorder='big') + response_body
-    
 
     # 0x15: Read Messages
     def read_messages(self, packet_content: bytes) -> bytes:
@@ -653,59 +688,59 @@ class Server:
             print(f"[mark_message_as_read] Exception: {e}")
             return b""
 
-
     # 0x29: Get user by username
     def get_user_by_username(self, packet_content: bytes) -> bytes:
-    """
-    Opcode 0x29: Get User by Username Request.
-    
-    Request format:
-      - 4-byte total length
-      - 1-byte opcode (0x29)
-      - 2-byte username length
-      - username (UTF-8)
-    
-    Response format:
-      - 4-byte total length
-      - 1-byte opcode (0x2A)
-      - 1-byte status code (0x00: found, 0x01: not found)
-      - if found: 2-byte user ID
-    """
-    try:
-        # Ensure packet is long enough to contain the username length field.
-        if len(packet_content) < 7:
-            raise ValueError("Packet too short for get_user_by_username")
+        """
+        Opcode 0x29: Get User by Username Request.
+        
+        Request format:
+        - 4-byte total length
+        - 1-byte opcode (0x29)
+        - 2-byte username length
+        - username (UTF-8)
+        
+        Response format:
+        - 4-byte total length
+        - 1-byte opcode (0x2A)
+        - 1-byte status code (0x00: found, 0x01: not found)
+        - if found: 2-byte user ID
+        """
+        try:
+            # Ensure packet is long enough to contain the username length field.
+            if len(packet_content) < 7:
+                raise ValueError("Packet too short for get_user_by_username")
+            
+            # Extract username length and username.
+            username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+            username = packet_content[7:7+username_length].decode('utf-8')
+            print(f"[get_user_by_username] Request for username: {username}")
+            
+            # Look up the user in the user trie.
+            user = driver.user_trie.trie.get(username)
+            response_body = bytearray()
+            response_body.append(0x2A)  # Response opcode
+            
+            if user:
+                # User found.
+                response_body.append(0x00)  # Status: success
+                response_body += user.userID.to_bytes(2, byteorder='big')
+                print(f"[get_user_by_username] Found user ID: {user.userID}")
+            else:
+                # User not found.
+                response_body.append(0x01)  # Status: not found
+                print(f"[get_user_by_username] Username '{username}' not found.")
+                
+                # Prepend length header.
+                response_length = len(response_body).to_bytes(4, byteorder='big')
+                return response_length + response_body
+            
+        except Exception as e:
+            print(f"[get_user_by_username] Exception: {e}")
+            # On error, return a response with not found status.
+            response_body = bytearray([0x2A, 0x01])
+            response_length = len(response_body).to_bytes(4, byteorder='big')
+            return response_length + response_body
 
-        # Extract username length and username.
-        username_length = int.from_bytes(packet_content[5:7], byteorder='big')
-        username = packet_content[7:7+username_length].decode('utf-8')
-        print(f"[get_user_by_username] Request for username: {username}")
-
-        # Look up the user in the user trie.
-        user = driver.user_trie.trie.get(username)
-        response_body = bytearray()
-        response_body.append(0x2A)  # Response opcode
-
-        if user:
-            # User found.
-            response_body.append(0x00)  # Status: success
-            response_body += user.userID.to_bytes(2, byteorder='big')
-            print(f"[get_user_by_username] Found user ID: {user.userID}")
-        else:
-            # User not found.
-            response_body.append(0x01)  # Status: not found
-            print(f"[get_user_by_username] Username '{username}' not found.")
-
-        # Prepend length header.
-        response_length = len(response_body).to_bytes(4, byteorder='big')
-        return response_length + response_body
-
-    except Exception as e:
-        print(f"[get_user_by_username] Exception: {e}")
-        # On error, return a response with not found status.
-        response_body = bytearray([0x2A, 0x01])
-        response_length = len(response_body).to_bytes(4, byteorder='big')
-        return response_length + response_body
         
     # OP CODE FUNCTIONS END
        
