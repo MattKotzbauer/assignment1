@@ -124,237 +124,277 @@ class Client:
             status = response[5]
             return status == 0x00
 
+    # -----------------------------------------------------
     # 0x03: Create Account
-    def create_account(self, username: str, password: str) -> str: 
+    # -----------------------------------------------------
+    def create_account(self, username: str, password: str) -> str:
         """
-        Opcode 0x03 (Create Account Request) and expect a Response (0x04):
-        Request format:
-            4-byte length of following body,
-            0x03,
-            2-byte username length,
-            username (UTF-8),
-            32-byte hashed password
-        Response format:
-            4-byte total length,
-            0x04,
-            32-byte session token
+        In binary mode:
+          Request: 4-byte length, 0x03, 2-byte username length, username (UTF-8),
+                   32-byte hashed password.
+          Response: 4-byte total length, 0x04, 32-byte session token.
+          
+        In JSON mode:
+          Request: { "opcode": "create_account",
+                     "username": <username>,
+                     "hashed_password": <sha256_hex_of_password> }
+          Response: { "opcode": "create_account_response",
+                      "session_token": <session token (hex)> }
         """
-        username_bytes = username.encode('utf-8')
-        username_length = len(username_bytes)
-        hashed_password = hashlib.sha256(password.encode('utf-8')).digest() 
-        
-        packet_body = bytes([0x03])
-        packet_body += username_length.to_bytes(2, byteorder='big')
-        packet_body += username_bytes
-        packet_body += hashed_password
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "create_account",
+                "username": username,
+                "hashed_password": hashlib.sha256(password.encode('utf-8')).hexdigest()
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            return response_data.get("session_token")
+        else:
+            username_bytes = username.encode('utf-8')
+            username_length = len(username_bytes)
+            hashed_password = hashlib.sha256(password.encode('utf-8')).digest()
+            packet_body = bytes([0x03]) \
+                          + username_length.to_bytes(2, byteorder='big') \
+                          + username_bytes \
+                          + hashed_password
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 4 + 1 + 32:
+                raise Exception("Incomplete response")
+            opcode_resp = response[4]
+            if opcode_resp != 0x04:
+                raise Exception("Unexpected opcode in create_account")
+            token = response[5:37].hex()
+            return token
 
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 4 + 1 + 32:
-            raise Exception("incomplete response")
-        
-        opcode_resp = response[4]
-        if opcode_resp != 0x04:
-            raise Exception("Unexpected opcode in create_account")
-
-        token = response[5:37].hex()
-        return token
-
+    # -----------------------------------------------------
     # 0x05: Log into Account
+    # -----------------------------------------------------
     def log_into_account(self, username: str, password: str) -> tuple[bool, str, int]:
         """
-        Opcode 0x05 (Login Account Request) and expect a Response (0x06):
-        Request format:
-            4-byte length of following body,
-            0x05,
-            2-byte username length,
-            username (UTF-8),
-            32-byte hashed password
-        Response format:
-            4-byte total length,
-            0x06,
-            1-byte status code
-                0x00 => success
-                0x01 => invalid credentials
-            32-byte session token,
-            4-byte unread messages count
+        In binary mode:
+          Request: 4-byte length, 0x05, 2-byte username length, username (UTF-8),
+                   32-byte hashed password.
+          Response: 4-byte total length, 0x06, 1-byte status code,
+                    32-byte session token, 4-byte unread messages count.
+                    
+        In JSON mode:
+          Request: { "opcode": "log_into_account",
+                     "username": <username>,
+                     "hashed_password": <sha256_hex_of_password> }
+          Response: { "opcode": "log_into_account_response",
+                      "success": true/false,
+                      "session_token": <session token (hex)>,
+                      "unread_count": <integer> }
         """
-        username_bytes = username.encode('utf-8')
-        username_length = len(username_bytes)
-        hashed_password = hashlib.sha256(password.encode('utf-8')).digest()
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "log_into_account",
+                "username": username,
+                "hashed_password": hashlib.sha256(password.encode('utf-8')).hexdigest()
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            success = response_data.get("success", False)
+            token = response_data.get("session_token", "")
+            unread_count = response_data.get("unread_count", 0)
+            return success, token, unread_count
+        else:
+            username_bytes = username.encode('utf-8')
+            username_length = len(username_bytes)
+            hashed_password = hashlib.sha256(password.encode('utf-8')).digest()
+            packet_body = bytes([0x05]) \
+                          + username_length.to_bytes(2, byteorder='big') \
+                          + username_bytes \
+                          + hashed_password
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 4 + 1 + 1 + 32 + 4:
+                raise Exception("Incomplete response")
+            opcode_resp = response[4]
+            if opcode_resp != 0x06:
+                raise Exception("Unexpected opcode in log_into_account")
+            status = response[5]
+            success = status == 0x00
+            token = response[6:38].hex()
+            unread_count = int.from_bytes(response[38:42], byteorder='big')
+            return success, token, unread_count
 
-        packet_body = bytes([0x05])
-        packet_body += username_length.to_bytes(2, byteorder='big')
-        packet_body += username_bytes
-        packet_body += hashed_password
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-
-        packet = packet_length + packet_body
-        response = self.send_request(packet)
-        
-        if len(response) < 4 + 1 + 1 + 32 + 4:
-            raise Exception("Incomplete response")
-
-        opcode_resp = response[4]
-        if opcode_resp != 0x06:
-            raise Exception("Unexpected opcode in login_account")
-
-        status = response[5]
-        success = status == 0x00
-        token = response[6:38].hex()
-        unread_count = int.from_bytes(response[38:42], byteorder='big')
-
-        return success, token, unread_count
-        
+    # -----------------------------------------------------
     # 0x07: Log out of Account
+    # -----------------------------------------------------
     def log_out_of_account(self, user_id: int, session_token: str) -> None:
         """
-        Opcode 0x07 (Log Out Request) and expect a Response (0x08):
-        Request format:
-            4-byte length of following body,
-            0x07,
-            2-byte user id,
-            32-byte session token
-        Response format:
-            4-byte total length,
-            0x08
+        In binary mode:
+          Request: 4-byte length, 0x07, 2-byte user id, 32-byte session token.
+          Response: 4-byte total length, 0x08.
+          
+        In JSON mode:
+          Request: { "opcode": "log_out_of_account",
+                     "user_id": <user_id>,
+                     "session_token": <session_token> }
+          Response: { "opcode": "log_out_of_account_response" }
         """
-        packet_body = bytes([0x07])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += bytes.fromhex(session_token)
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "log_out_of_account",
+                "user_id": user_id,
+                "session_token": session_token
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "log_out_of_account_response":
+                raise Exception("Unexpected response in log_out_of_account")
+            return
+        else:
+            packet_body = bytes([0x07]) \
+                          + user_id.to_bytes(2, byteorder='big') \
+                          + bytes.fromhex(session_token)
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 4 + 1:
+                raise Exception("Incomplete response")
+            opcode_resp = response[4]
+            if opcode_resp != 0x08:
+                raise Exception("Unexpected opcode in log_out_of_account")
 
-        packet =  packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 4 + 1:
-            raise Exception("Incomplete response")
-
-        opcode_resp = response[4]
-        if opcode_resp != 0x08:
-            raise Exception("Unexpected opcode in log_out_account")
-    
+    # -----------------------------------------------------
     # 0x09: List Accounts
+    # -----------------------------------------------------
     def list_accounts(self, user_id: int, session_token: str, wildcard: str) -> list[str]:
         """
-        Opcode 0x09 (List Accounts Request) and expect a Response (0x10):
-        Request format:
-            4-byte length of following body,
-            0x09,
-            2-byte user id,
-            32-byte session token,
-            2-byte wildcard length,
-            wildcard string (UTF-8)
-        Response format:
-            4-byte total length,
-            0x10,
-            2-byte count of accounts,
-            for each account:
-                2-byte username length,
-                username (UTF-8)
+        In binary mode:
+          Request: 4-byte length, 0x09, 2-byte user id, 32-byte session token,
+                   2-byte wildcard length, wildcard (UTF-8).
+          Response: 4-byte total length, 0x10, 2-byte account count,
+                    then for each account: 2-byte username length, username (UTF-8).
+                    
+        In JSON mode:
+          Request: { "opcode": "list_accounts",
+                     "user_id": <user_id>,
+                     "session_token": <session_token>,
+                     "wildcard": <wildcard> }
+          Response: { "opcode": "list_accounts_response",
+                      "accounts": [ <username>, ... ] }
         """
-        wildcard_bytes = wildcard.encode('utf-8')
-        wildcard_length = len(wildcard_bytes)
-
-        packet_body = bytes([0x09])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += bytes.fromhex(session_token)
-        packet_body += wildcard_length.to_bytes(2, byteorder='big')
-        packet_body += wildcard_bytes
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-
-        packet = packet_length + packet_body
-        
-        response = self.send_request(packet)
-        if len(response) < 4 + 1 + 2:
-            raise Exception("Incomplete response")
-
-        opcode_resp = response[4]
-        if opcode_resp != 0x10:
-            raise Exception("Unexpected opcode in list_accounts")
-
-        account_count = int.from_bytes(response[5:7], byteorder='big')
-        usernames = []
-        pos = 7
-        
-        for _ in range(account_count):
-            if len(response) < pos + 2:
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "list_accounts",
+                "user_id": user_id,
+                "session_token": session_token,
+                "wildcard": wildcard
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            return response_data.get("accounts", [])
+        else:
+            wildcard_bytes = wildcard.encode('utf-8')
+            wildcard_length = len(wildcard_bytes)
+            packet_body = bytes([0x09]) \
+                          + user_id.to_bytes(2, byteorder='big') \
+                          + bytes.fromhex(session_token) \
+                          + wildcard_length.to_bytes(2, byteorder='big') \
+                          + wildcard_bytes
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 4 + 1 + 2:
                 raise Exception("Incomplete response")
-            username_length = int.from_bytes(response[pos:pos+2], byteorder='big')
-            pos += 2
-            
-            if len(response) < pos + username_length:
-                raise Exception("Incomplete response")
-            username = response[pos:pos+username_length].decode('utf-8')
-            pos += username_length
-            usernames.append(username)
+            opcode_resp = response[4]
+            if opcode_resp != 0x10:
+                raise Exception("Unexpected opcode in list_accounts")
+            account_count = int.from_bytes(response[5:7], byteorder='big')
+            usernames = []
+            pos = 7
+            for _ in range(account_count):
+                if len(response) < pos + 2:
+                    raise Exception("Incomplete response")
+                username_length = int.from_bytes(response[pos:pos+2], byteorder='big')
+                pos += 2
+                if len(response) < pos + username_length:
+                    raise Exception("Incomplete response")
+                username = response[pos:pos+username_length].decode('utf-8')
+                pos += username_length
+                usernames.append(username)
+            return usernames
 
-        return usernames
-            
+    # -----------------------------------------------------
     # 0x11: Display Conversation
+    # -----------------------------------------------------
     def display_conversation(self, user_id: int, session_token: str, conversant_id: int) -> list[tuple[int, str, bool]]:
         """
-        Retrieve conversation history between user and conversant.
-        
-        Args:
-        user_id: ID of requesting user
-        session_token: User's session token
-        conversant_id: ID of other user in conversation
-        
-        Returns:
-        List of tuples containing (message_id, message_content, is_sender)
+        In binary mode:
+          Request: 4-byte length, 0x11, 2-byte user id, 32-byte session token, 2-byte conversant id.
+          Response: 4-byte total length, 0x12, 4-byte message count,
+                    then for each message: 4-byte message id, 2-byte message length,
+                    1-byte flag (0x01 if sender, else 0x00), message content (UTF-8).
+                    
+        In JSON mode:
+          Request: { "opcode": "display_conversation",
+                     "user_id": <user_id>,
+                     "session_token": <session_token>,
+                     "conversant_id": <conversant_id> }
+          Response: { "opcode": "display_conversation_response",
+                      "messages": [ 
+                          { "message_id": <int>, "content": <str>, "is_sender": <bool> },
+                          ... 
+                      ] }
         """
-        # Construct request packet
-        packet_body = bytes([0x11])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += bytes.fromhex(session_token)
-        packet_body += conversant_id.to_bytes(2, byteorder='big')
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "display_conversation",
+                "user_id": user_id,
+                "session_token": session_token,
+                "conversant_id": conversant_id
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            messages = response_data.get("messages", [])
+            result = []
+            for msg in messages:
+                result.append((msg.get("message_id"), msg.get("content"), msg.get("is_sender")))
+            return result
+        else:
+            packet_body = bytes([0x11]) \
+                          + user_id.to_bytes(2, byteorder='big') \
+                          + bytes.fromhex(session_token) \
+                          + conversant_id.to_bytes(2, byteorder='big')
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 4 + 1 + 4:
+                raise Exception("Incomplete response")
+            opcode = response[4]
+            if opcode != 0x12:
+                raise Exception("Unexpected opcode in display_conversation")
+            message_count = int.from_bytes(response[5:9], byteorder='big')
+            messages = []
+            current_pos = 9
+            for _ in range(message_count):
+                if len(response) < current_pos + 4 + 2 + 1:
+                    raise Exception("Incomplete message data")
+                msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
+                current_pos += 4
+                msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
+                current_pos += 2
+                is_sender = response[current_pos] == 0x01
+                current_pos += 1
+                if len(response) < current_pos + msg_length:
+                    raise Exception("Incomplete message content")
+                msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
+                current_pos += msg_length
+                messages.append((msg_id, msg_content, is_sender))
+            return messages
         
-        packet = packet_length + packet_body
-        
-        # Send request and get response
-        response = self.send_request(packet)
-        
-        if len(response) < 4 + 1 + 4:
-            raise Exception("Incomplete response")
-        
-        opcode = response[4]
-        if opcode != 0x12:
-            raise Exception("Unexpected opcode in display_conversation")
-        
-        # Parse message count
-        message_count = int.from_bytes(response[5:9], byteorder='big')
-        
-        # Parse messages
-        messages = []
-        current_pos = 9
-        
-        for _ in range(message_count):
-            if len(response) < current_pos + 4 + 2 + 1:
-                raise Exception("Incomplete message data")
-            
-            msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
-            current_pos += 4
-            
-            msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
-            current_pos += 2
-            
-            is_sender = response[current_pos] == 0x01
-            current_pos += 1
-            
-            if len(response) < current_pos + msg_length:
-                raise Exception("Incomplete message content")
-            
-            msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
-            current_pos += msg_length
-            
-            messages.append((msg_id, msg_content, is_sender))
-            
-        return messages
-
     # 0x13: Send Message
     def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> None:
         """
