@@ -248,6 +248,65 @@ Client uses session token for all message API requests (read, send message, sear
 	2. Response (0x20)
 		1. length
 		2. 0x20
+11. Get user's unread messages
+    	1. Request (0x21)
+	   	1. packet length
+		2. 0x21
+		3. user ID (2 bytes)
+		4. session token (32 bytes)
+	2. Response (0x22)
+	   	1. length
+		2. 0x22
+		3. number of unread messages (4 bytes)
+		   1. for each unread message:
+		      * message UID (4 bytes)
+		      * sender ID (2 bytes)
+		      * receiver ID (2 bytes)
+12. Get message information 
+      1. Request (0x23)
+       	        1. packet length (4 bytes)
+		2. 0x23
+		3. user ID (2 bytes)
+		4. session token (32 bytes)
+		5. message UID (4 bytes)
+       2. Response (0x24)
+       	  	1. packet length
+		2. 0x24
+		3. has been read (1 byte)
+		4. sender ID (2 bytes)
+		5. content length (2 bytes)
+		6. message content (`content length` chars)
+13. Get username by ID
+       1. Request (0x25)
+       	        1. packet length (4 bytes)
+		2. 0x25
+		3. user ID (2 bytes)
+       2. Response (0x26)
+       	        1. packet length (4 bytes)
+		2. 0x26
+		3. username length (2 bytes)
+		4. username
+14. Mark message as read
+       1. Request (0x27)
+          	1. packet length (4 bytes)
+		2. 0x27
+		3. user ID (2 bytes)
+		4. session token (32 bytes)
+		5. message UID (4 bytes)
+       2. Response (0x28)
+       	        1. packet length (4 bytes)
+		2. 0x28
+15. Get user info by userID
+      1. Request (0x29)
+      	        1. packet length (4 bytes)
+		2. 0x29
+		3. username length (2 bytes)
+		4. username (utf-8)
+      2. Response (0x2A)
+      	        1. packet length (4 bytes)
+		2. 0x2A
+		3. status code (0x00 if found, 0x01 if not)
+		4. userID (2 bytes, if found)
 
 ```
 
@@ -260,6 +319,9 @@ TODO's:
   * (Needed metadata: userID, session token, time elapsed)
   * (Could keep like an auxiliary global dict for managing session tokens? E.g. userID -> member of session token class, which could contain both the token itself + valid time remaining. Then if it hits 0, we generate a new one and send it to the user)
 
+
+* (or like just need to debug test-by-test right)
+  * (like if the interface is not going to be tested, and it's solely code quality, then u don't dont' havedont' havedont' have)
 
 Potential Optimizations:
 * DLL + Hashmap data structure

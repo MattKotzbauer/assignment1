@@ -2,44 +2,39 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
 from queue import Queue
-from socket_handler import Client
 import os
 import sys
 import hashlib
 
 # Add the driver directory to Python path
-# sys.path.append(os.path.join(os.path.dirname(__file__), 'driver'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'driver'))
 
-# from driver.driver import (
-    # create_account, check_password, list_accounts,
-    # send_message, read_messages as mark_messages_as_read, delete_message, generate_session_token,
-    # hash_password, user_base, user_trie, conversations, message_base, delete_account
-# )
-# from driver.core_entities import Message, User
+from driver.driver import (
+    create_account, check_password, list_accounts,
+    send_message, read_messages as mark_messages_as_read, delete_message, generate_session_token,
+    hash_password, user_base, user_trie, conversations, message_base, delete_account
+)
+from driver.core_entities import Message, User
 
 def get_username_by_id(user_id: int) -> str:
     """Get username by user ID"""
     print(f"Looking up username for ID: {user_id}")
-    # user = user_base.users.get(user_id)
-    username = self.client.get_username_by_id(user_id)
-    return username # (returns None if empty)
-    # if user:
-        # print(f"Found user: {user.username}")
-        # return user.username
-    # print(f"No user found for ID: {user_id}")
-    # return None
+    user = user_base.users.get(user_id)
+    if user:
+        print(f"Found user: {user.username}")
+        return user.username
+    print(f"No user found for ID: {user_id}")
+    return None
 
-def get_userID_by_username(username: str) -> int:
-    found, user_id = self.client.get_user_by_username(username)
-    return user_id if found else 0
+def get_user_by_username(username: str) -> User:
     """Get user object by username"""
-    # print(f"Looking up user object for username: {username}")
-    # user = user_trie.trie.get(username)
-    # if user:
-        # print(f"Found user object: ID={user.userID}")
-    # else:
-        # print(f"No user object found for username: {username}")
-    # return user
+    print(f"Looking up user object for username: {username}")
+    user = user_trie.trie.get(username)
+    if user:
+        print(f"Found user object: ID={user.userID}")
+    else:
+        print(f"No user object found for username: {username}")
+    return user
 
 class ChatInterface:
     def __init__(self):
@@ -53,12 +48,9 @@ class ChatInterface:
         self.message_queue = Queue()
         
         # User session data
-        # NOTE: basically any persistent metadata we want within client session can be initialized here
         self.current_user_id = None
         self.current_token = None
         self.message_ids = []
-
-        self.client = Client()
         
         # Configure grid weights for the root window
         self.root.grid_rowconfigure(0, weight=1)
@@ -187,16 +179,16 @@ class ChatInterface:
             return
             
         print(f"Username entered: {username}")
-        hashed_password = self.client.hash_password(password)
+        hashed_password = hash_password(password)
         print(f"Password hashed for {username}")
         
         # Check if user exists
         print(f"Looking up user object for username: {username}")
-        userID = get_userID_by_username(username)
-        print(f"User lookup result: {userID}")
+        user = get_user_by_username(username)
+        print(f"User lookup result: {user}")
         
         # Handle non-existent user
-        if not userID:
+        if not user:
             print(f"\n=== User Not Found Flow ===\n")
             print(f"1. Detected missing user: {username}")
             
@@ -217,12 +209,12 @@ class ChatInterface:
                 
                 print("3. Creating new account...")
                 try:
-                    self.current_token = self.client.create_account(username, hashed_password)
-                    userID = get_userID_by_username(username)
-                    if not userID:
+                    self.current_token = create_account(username, hashed_password)
+                    user = get_user_by_username(username)
+                    if not user:
                         raise Exception("Failed to create account")
                     
-                    self.current_user_id = userID
+                    self.current_user_id = user.userID
                     print("4. Account created successfully")
                     messagebox.showinfo(
                         "Welcome",
@@ -245,9 +237,7 @@ class ChatInterface:
         # Handle existing user login
         try:
             print("\n=== Existing User Login Flow ===\n")
-            # self.current_token = check_password(username, hashed_password)
-            login_result = self.client.log_into_account(username, hashed_password)
-            self.current_token = login_result[1]
+            self.current_token = check_password(username, hashed_password)
             self.current_user_id = user.userID
             print("Login successful")
             self.show_main_screen()
@@ -272,9 +262,8 @@ class ChatInterface:
             return
             
         try:
-            hashed_password = self.client.hash_password(password)
-            self.current_token = self.client.create_account(username, hashed_password)
-            # TODO: translate to backend WP function
+            hashed_password = hash_password(password)
+            self.current_token = create_account(username, hashed_password)
             user = user_trie.trie.get(username)
             self.current_user_id = user.uid
             self.show_main_screen()
@@ -299,18 +288,13 @@ class ChatInterface:
             icon='warning'
         ):
             return
-
-        self.client.delete_account(self.current_user_id, self.current_token)
-        messagebox.showinfo("Success", "Your account has been deleted successfully.")
-        self.handle_logout()  # Logout after deletion
-        
-        # TODO: (deletion error handling if needed?)
+            
         # Delete the account
-        # if delete_account(self.current_user_id):
-            # messagebox.showinfo("Success", "Your account has been deleted successfully.")
-            # self.handle_logout()  # Logout after deletion
-        # else:
-            # messagebox.showerror("Error", "Failed to delete account. Please try again.")
+        if delete_account(self.current_user_id):
+            messagebox.showinfo("Success", "Your account has been deleted successfully.")
+            self.handle_logout()  # Logout after deletion
+        else:
+            messagebox.showerror("Error", "Failed to delete account. Please try again.")
         
     def create_user_list(self):
         """Creates the left panel containing the list of online users"""
@@ -414,9 +398,8 @@ class ChatInterface:
         
         try:
             # Hash the password and create account
-            hashed_password = self.client.hash_password(password)
-            # TODO: why don't we track session token here
-            # self.client.create_account(username, hashed_password)
+            hashed_password = hash_password(password)
+            create_account(username, hashed_password)
             
             # Auto-login after successful signup
             self.handle_login()
@@ -440,13 +423,11 @@ class ChatInterface:
             
             print("2. Getting current username...")
             current_username = get_username_by_id(self.current_user_id)
-            # TODO: 
             current_user = user_base.users.get(self.current_user_id)
             print(f"Current username: {current_username}")
             
             print("3. Getting all users...")
-            # users = list_accounts("*")
-            users = self.client.list_accounts("*")
+            users = list_accounts("*")
             print(f"Found {len(users)} users: {users}")
             
             # Get users with unread messages first
@@ -454,7 +435,7 @@ class ChatInterface:
             unread_counts = {}
             
             # Count unread messages per sender
-            for msg_id in current_user.unread_messages:
+            for msg_id in current_user.unreadMessages:
                 msg = message_base.messages.get(msg_id)
                 if msg:
                     sender_username = get_username_by_id(msg.sender_id)
@@ -503,18 +484,13 @@ class ChatInterface:
             messagebox.showerror("Error", "Recipient does not exist")
             return
         recipient_id = recipient.userID  # Get the recipient's user ID
-
-        # Send message (TODO: error handling display in case of packet error??)
-        self.client.send_message(self.current_user_id, self.current_token, recipient_id, message)
-        self.message_entry.delete(0, tk.END)
-        self.display_messages()
     
         # Send the message
-        # if send_message(self.current_user_id, recipient_id, message):
-            # self.message_entry.delete(0, tk.END)
-            # self.display_messages()
-        # else:
-            # messagebox.showerror("Error", "Failed to send message")
+        if send_message(self.current_user_id, recipient_id, message):
+            self.message_entry.delete(0, tk.END)
+            self.display_messages()
+        else:
+            messagebox.showerror("Error", "Failed to send message")
     
     def display_messages(self, mark_as_read=False):
         """Read and display messages"""
@@ -546,7 +522,6 @@ class ChatInterface:
         
         # Get messages for the current conversation
         messages = conversations.conversations[conversation_key]
-        # messages = self.client.display_conversation() self.current_user_id, current.token, RECEIVER_ID
         messages.sort(key=lambda x: x.uid)  # Sort by message ID to maintain order
         
         # Separate unread and read messages
@@ -562,8 +537,7 @@ class ChatInterface:
                     unread_messages.append((msg, f"{sender_username}: {msg.contents}"))
                     if mark_as_read:  # Mark as read if requested
                         msg.has_been_read = True
-                        # mark_messages_as_read(self.current_user_id, 1)
-                        self.client.read_messages(self.current_user_id, self.current_token, 1)
+                        mark_messages_as_read(self.current_user_id, 1)
                 else:
                     read_messages.append((msg, f"{sender_username}: {msg.contents}"))
         
@@ -649,8 +623,7 @@ class ChatInterface:
                 
                 if message and not message.has_been_read and message.sender_id != self.current_user_id:
                     message.has_been_read = True
-                    # mark_messages_as_read(self.current_user_id, 1)
-                    self.client.read_messages(self.current_user_id)
+                    mark_messages_as_read(self.current_user_id, 1)
                     # Update the message display
                     self.messages_list.itemconfig(index, fg='black')
                     self.update_unread_count()
@@ -714,12 +687,11 @@ class ChatInterface:
         
         # Create test account users
         for username, password in test_users:
-            # if not user_trie.trie.get(username): # after 'try'
             try:
-                if not self.client.search_username(username): 
-                    create_account(username, self.client.hash_password(password))
+                if not user_trie.trie.get(username):
+                    create_account(username, hash_password(password))
             except Exception as e:
-                print(f"Error creating user {username}: {es}")
+                print(f"Error creating user {username}: {e}")
         
         # Print test accounts
         print("Test accounts created:")
@@ -738,7 +710,7 @@ class ChatInterface:
         if not user:
             return
             
-        unread_count = len(user.unread_messages)
+        unread_count = len(user.unreadMessages)
         if unread_count == 0:
             self.unread_label.config(text="No unread messages", foreground="#666666")
         else:

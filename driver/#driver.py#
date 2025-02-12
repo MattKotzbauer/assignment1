@@ -18,7 +18,7 @@ user_trie = GlobalUserTrie()
 session_tokens = GlobalSessionTokens()
 message_base = GlobalMessageBase()
 conversations = GlobalConversations()
-
+2
 # BACKEND-BASED FUNCTIONS START
 # FUNCTIONS 1 + 2
 def create_account(username: str, hashed_password: str) -> str:
