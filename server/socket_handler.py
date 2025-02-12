@@ -123,8 +123,19 @@ class Server:
                     if opcode == "search_username":
                         response_data = self.search_username_json(request)
                         # Convert the response back to JSON and prepend the length header.
+                    elif opcode == "create_account":
+                        response_data = self.create_account_json(request)
+                    elif opcode == "log_into_account":
+                        response_data = self.log_into_account_json(request)
+                    elif opcode == "log_out_of_account":
+                        response_data = self.log_out_of_account_json(request)
+                    elif opcode == "list_accounts":
+                        response_data = self.list_accounts_json(request)
+                    elif opcode == "display_conversation":
+                        response_data = self.display_conversation_json(request)
+                        
                     elif opcode == "foo":
-                        pass
+                        pass 
                         
                     response_json = json.dumps(response_data).encode('utf-8')
                     response_packet = len(response_json).to_bytes(4, byteorder='big') + response_json
@@ -180,7 +191,12 @@ class Server:
     # PACKET HANDLER CONTROL FLOW END
 
     # CUSTOM PROTOCOL JSON-BASED FUNCTIONS START
+
     def search_username_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "search_username", "username": <username> }
+        Response: { "opcode": "search_username_response", "available": <bool> }
+        """
         username = request.get("username", "")
         user_exists = driver.user_trie.trie.get(username) is not None
         available = not user_exists
@@ -188,8 +204,129 @@ class Server:
         return {
             "opcode": "search_username_response",
             "available": available
-    }
-    
+        }
+
+    def create_account_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "create_account", "username": <username>, "hashed_password": <sha256_hex> }
+        Response: { "opcode": "create_account_response", "session_token": <token> }
+        """
+        username = request.get("username", "")
+        hashed_password = request.get("hashed_password", "")
+        token = driver.create_account(username, hashed_password)
+        print(f"[JSON] Creating account for '{username}', returning token {token}")
+        return {
+            "opcode": "create_account_response",
+            "session_token": token
+        }
+
+    def log_into_account_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "log_into_account", "username": <username>, "hashed_password": <sha256_hex> }
+        Response: { "opcode": "log_into_account_response",
+                "status": 0,           # 0 => success; 1 => invalid credentials
+                "session_token": <token>,
+                "unread_count": <int> }
+        """
+        username = request.get("username", "")
+        hashed_password = request.get("hashed_password", "")
+        user = driver.user_trie.trie.get(username)
+        if user is not None and driver.check_password(username, hashed_password):
+            status = 0
+            token = driver.generate_session_token(user.userID)
+            unread_count = len(user.unread_messages)
+            return {  # Always return a dictionary in the success branch
+            "opcode": "log_into_account_response",
+            "status": status,
+            "session_token": token,
+            "unread_count": unread_count
+            }
+        else:
+            status = 1
+            token = "0" * 64  # or an empty token, as desired
+            unread_count = 0
+            print(f"[JSON] Log into account for '{username}': status {status}, token: {token}, unread: {unread_count}")
+            return {
+                "opcode": "log_into_account_response",
+                "status": status,
+                "session_token": token,
+                "unread_count": unread_count
+            }
+        
+    def log_out_of_account_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "log_out_of_account", "user_id": <user_id>, "session_token": <token> }
+        Response: { "opcode": "log_out_of_account_response" }
+        """
+        user_id = request.get("user_id")
+        provided_token = request.get("session_token", "")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token and stored_token == provided_token:
+            del driver.session_tokens.tokens[user_id]
+            print(f"[JSON] User {user_id} logged out successfully.")
+        else:
+            print(f"[JSON] Log out failed for user {user_id} (invalid token).")
+            return {
+                "opcode": "log_out_of_account_response"
+            }
+
+    def list_accounts_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "list_accounts", "user_id": <user_id>,
+               "session_token": <token>, "wildcard": <wildcard> }
+        Response: { "opcode": "list_accounts_response", "accounts": [<username>, ...] }
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        wildcard = request.get("wildcard", "")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        authenticated = stored_token is not None and stored_token == session_token
+        if authenticated:
+            matching_accounts = driver.list_accounts(wildcard)
+            print(f"[JSON] Listing accounts for user {user_id} with wildcard '{wildcard}': found {len(matching_accounts)}")
+            return {
+                "opcode": "list_accounts_response",
+                "accounts": matching_accounts
+            }
+        else:
+            matching_accounts = []
+            print(f"[JSON] Listing accounts for user {user_id} failed due to invalid token.")
+            return {
+                "opcode": "list_accounts_response",
+                "accounts": matching_accounts
+            }
+
+    def display_conversation_json(self, request: dict) -> dict:
+        """
+        Request: { "opcode": "display_conversation", "user_id": <user_id>,
+               "session_token": <token>, "conversant_id": <other_user_id> }
+        Response: { "opcode": "display_conversation_response",
+                "messages": [ { "message_id": <int>, "content": <str>, "is_sender": <bool> }, ... ] }
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        conversant_id = request.get("conversant_id")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Display conversation: invalid token for user {user_id}.")
+            messages = []
+        else:
+            key = tuple(sorted([user_id, conversant_id]))
+            messages_list = driver.conversations.conversations.get(key, [])
+            messages = []
+            for msg in messages_list:
+                messages.append({
+                    "message_id": msg.uid,
+                    "content": msg.contents,
+                    "is_sender": (msg.sender_id == user_id)
+                })
+                print(f"[JSON] Display conversation for user {user_id} with conversant {conversant_id}: {len(messages)} messages.")
+        return {
+            "opcode": "display_conversation_response",
+            "messages": messages
+        }
+
+
     # CUSTOM PROTOCOL OP CODE FUNCTIONS START
     
     # 0x01: Search Username
