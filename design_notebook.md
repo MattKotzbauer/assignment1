@@ -23,7 +23,6 @@ Thinking about the shape of our packet is something I want to do carefully since
 
 02/04/2025:
 
-
 02/03/2025:
 - Since I used primarily SQL last summer, I feel relatively comfortable with how the data might be stored: I'd probably use something like sqlite to store all of the messages in a central database (as the scalability / ordering of our data doesn't seem to be a concern)
 - The first question I'm considering is, in turn, the way that we want to store our messages
@@ -56,3 +55,11 @@ Thinking about the shape of our packet is something I want to do carefully since
   - An "unread messages" section in read where the user can see which messages haven't been read yet, how many they are, from which user it is, and it automatically updates to 'read' when the user reads the message. Ths makes it easier for the user to mark messages as read, since they don't need to manually click a message "read" after they've already read it themselves.
   - Delete account and all associated messages, especially with unread messages. Still unsure what "semantically" deleting an account means, but I added an "are you sure?" prompt in the GUI and a warning of what deleting the account would do. When the account is deleted, also it allows us to reuse the account ID for future accounts.
   - Other confirmation dialogue in places to prevent accidental deletion of messages or accounts and clear feedback of consequences when deleting.
+
+2/12/2025:
+- Inplemented unit testing of the GUI with mocks to ensure main functions work as expected. I thought about some of the main "basic" tests that would be helpful to test out as well as some boundary tests to check for edge cases. 
+  - Login / New user creation: Testing logout, username by user id, user by username, and login / create account
+  - Message sending: Tested sending message, display message, and refreshing the user list
+- Testing GUI can be difficult involves a lot of verification of outputs to be correct, also in the future should add more interfaces to align more with SOLID principles (integration separation ISP.)
+- Tkinter also is hard to mock without creating the actual window since need to handle states and asynch / synch functions. 
+- In the future might want to use more proper state management (e.g. Observer / Redux)
