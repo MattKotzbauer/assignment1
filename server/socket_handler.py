@@ -303,7 +303,7 @@ class Server:
                 "accounts": matching_accounts
             }
 
-    # 0x11: Display conversations (json)
+    # 0x11: Display Conversations (json)
     def display_conversation_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "display_conversation", "user_id": <user_id>,
@@ -334,6 +334,116 @@ class Server:
             "messages": messages
         }
 
+    # 0x13: Send Message (json)
+    def send_message_json(self, request: dict) -> dict:
+        """
+        JSON Request:
+        { 
+        "opcode": "send_message",
+        "user_id": <int>,
+        "session_token": <str>,
+        "recipient_id": <int>,
+        "message": <str>
+        }
+        JSON Response:
+        { "opcode": "send_message_response" }
+        
+        The function validates the session token for the given user_id and,
+        if valid, calls driver.send_message to deliver the message.
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        recipient_id = request.get("recipient_id")
+        message = request.get("message", "")
+        
+        # Validate the session token.
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for send message (user {user_id}).")
+        else:
+            driver.send_message(user_id, recipient_id, message)
+            
+        return { "opcode": "send_message_response" }
+    
+    # 0x15: Read Messages (json)
+    def read_messages_json(self, request: dict) -> dict:
+        """
+        JSON Request:
+        { 
+        "opcode": "read_messages",
+        "user_id": <int>,
+        "session_token": <str>,
+        "num_messages": <int>
+        }
+        JSON Response:
+        { "opcode": "read_messages_response" }
+        
+        Validates the session token and then instructs the driver
+        to mark the requested number of messages as read.
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        num_messages = request.get("num_messages")
+        
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for read messages (user {user_id}).")
+        else:
+            driver.read_messages(user_id, num_messages)
+            
+        return { "opcode": "read_messages_response" }
+        
+    # 0x17: Delete Message (json)
+    def delete_message_json(self, request: dict) -> dict:
+        """
+        JSON Request:
+        { 
+        "opcode": "delete_message",
+        "user_id": <int>,
+        "message_uid": <int>,
+        "session_token": <str>
+        }
+        JSON Response:
+        { "opcode": "delete_message_response" }
+        
+        The function validates the session token and, if valid, deletes the message.
+        """
+        user_id = request.get("user_id")
+        message_uid = request.get("message_uid")
+        session_token = request.get("session_token", "")
+        
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for delete message (user {user_id}).")
+        else:
+            driver.delete_message(message_uid)
+            
+        return { "opcode": "delete_message_response" }
+
+    # 0x19: Delete Account (json)
+    def delete_account_json(self, request: dict) -> dict:
+        """
+        JSON Request:
+        { 
+        "opcode": "delete_account",
+        "user_id": <int>,
+        "session_token": <str>
+        }
+        JSON Response:
+        { "opcode": "delete_account_response" }
+        
+        The function validates the session token and then deletes the account.
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for delete account (user {user_id}).")
+        else:
+            driver.delete_account(user_id)
+            
+        return { "opcode": "delete_account_response" }
     
 
     # CUSTOM PROTOCOL JSON-BASED FUNCTIONS END
@@ -649,7 +759,7 @@ class Server:
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body
         return full_response
-
+            
     # 0x19: Delete Account
     def delete_account(self, packet_content: bytes) -> bytes:
         # Request (0x19):
@@ -673,7 +783,7 @@ class Server:
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body
         return full_response
-
+            
     # 0x21: Get user's unread messages
     def get_unread_messages(self, packet_content: bytes) -> bytes:
         # Request format:
@@ -774,7 +884,6 @@ class Server:
         except Exception as e:
             print(f"[get_message_info] Exception: {e}")
             return b""
-        
 
     # 0x25: Get username by ID
     def get_username_by_id(self, packet_content: bytes) -> bytes:
