@@ -43,7 +43,7 @@ python3 -c "import tkinter; tkinter._test()"
 
 ### Running the Application GUI
 
-Run the GUI:
+Run the application:
 ```bash
 python3 tkinter_base.py
 ```
