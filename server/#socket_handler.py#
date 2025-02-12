@@ -255,7 +255,8 @@ class Server:
                 "session_token": token,
                 "unread_count": unread_count
             }
-        
+
+    # 0x07: Log out of Account (json)
     def log_out_of_account_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "log_out_of_account", "user_id": <user_id>, "session_token": <token> }
@@ -273,6 +274,7 @@ class Server:
                 "opcode": "log_out_of_account_response"
             }
 
+    # 0x09: List Accounts (json)
     def list_accounts_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "list_accounts", "user_id": <user_id>,
@@ -299,6 +301,7 @@ class Server:
                 "accounts": matching_accounts
             }
 
+    # 0x11: Display conversations (json)
     def display_conversation_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "display_conversation", "user_id": <user_id>,
