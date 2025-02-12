@@ -1,10 +1,13 @@
+# Termination test for primary account-based backend driver functions
+
 import socket
 import time
 from socket_handler import Client
 
 def test_messaging_operations():
-    client1 = Client()
-    client2 = Client()
+
+    client1 = Client(host="127.0.0.1", port=65432)
+    client2 = Client(host="127.0.0.1", port=65432)
     client1.connect()
     client2.connect()
     

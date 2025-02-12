@@ -652,12 +652,75 @@ class Server:
         except Exception as e:
             print(f"[mark_message_as_read] Exception: {e}")
             return b""
+
+
+    # 0x29: Get user by username
+    def get_user_by_username(self, packet_content: bytes) -> bytes:
+    """
+    Opcode 0x29: Get User by Username Request.
     
+    Request format:
+      - 4-byte total length
+      - 1-byte opcode (0x29)
+      - 2-byte username length
+      - username (UTF-8)
+    
+    Response format:
+      - 4-byte total length
+      - 1-byte opcode (0x2A)
+      - 1-byte status code (0x00: found, 0x01: not found)
+      - if found: 2-byte user ID
+    """
+    try:
+        # Ensure packet is long enough to contain the username length field.
+        if len(packet_content) < 7:
+            raise ValueError("Packet too short for get_user_by_username")
+
+        # Extract username length and username.
+        username_length = int.from_bytes(packet_content[5:7], byteorder='big')
+        username = packet_content[7:7+username_length].decode('utf-8')
+        print(f"[get_user_by_username] Request for username: {username}")
+
+        # Look up the user in the user trie.
+        user = driver.user_trie.trie.get(username)
+        response_body = bytearray()
+        response_body.append(0x2A)  # Response opcode
+
+        if user:
+            # User found.
+            response_body.append(0x00)  # Status: success
+            response_body += user.userID.to_bytes(2, byteorder='big')
+            print(f"[get_user_by_username] Found user ID: {user.userID}")
+        else:
+            # User not found.
+            response_body.append(0x01)  # Status: not found
+            print(f"[get_user_by_username] Username '{username}' not found.")
+
+        # Prepend length header.
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        return response_length + response_body
+
+    except Exception as e:
+        print(f"[get_user_by_username] Exception: {e}")
+        # On error, return a response with not found status.
+        response_body = bytearray([0x2A, 0x01])
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        return response_length + response_body
+        
     # OP CODE FUNCTIONS END
        
     
 
 if __name__ == "__main__":
-    server = Server()
+    host = "127.0.0.1"
+    port = 65432
+    
+    args = sys.argv[1:]
+    if len(args) >= 1:
+        host = args[0]
+    if len(args) >= 2:
+        port = int(args[1])
+    
+    server = Server(host = host, port = port)
     server.start()
     server.run()
