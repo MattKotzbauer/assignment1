@@ -614,9 +614,9 @@ class Server:
             uname_length = len(username_bytes)
             response_body += uname_length.to_bytes(2, byteorder='big') + username_bytes
             
-            response_length = len(response_body).to_bytes(4, byteorder='big')
-            full_response = response_length + response_body
-            return full_response
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
     
     # 0x11: Display Conversation
     def display_conversation(self, packet_content: bytes) -> bytes:
