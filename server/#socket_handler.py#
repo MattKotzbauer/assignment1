@@ -1007,12 +1007,11 @@ class Server:
             # On error, return a response with not found status.
             response_body = bytearray([0x2A, 0x01])
             response_length = len(response_body).to_bytes(4, byteorder='big')
-            return response_length + response_body
-
+            return response_length + response_bod
         
-    # OP CODE FUNCTIONS END
-       
-    
+    # CUSTOM PROTOCOL OP CODE FUNCTIONS END
+
+    # ----------------------------------------------------- 
 
 if __name__ == "__main__":
     host = "127.0.0.1"

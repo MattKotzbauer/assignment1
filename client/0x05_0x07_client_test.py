@@ -4,7 +4,7 @@ import time
 from socket_handler import Client
 
 def test_login_logout_flow():
-    client = Client()
+    client = Client(host = "127.0.0.1", port = 65432, use_json = False)
     client.connect()
     
     try:

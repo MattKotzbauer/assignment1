@@ -78,7 +78,7 @@ def send_message(sender_id: int, recipient_id: int, message_content: str):
         return False
 
     if message_base._deleted_message_ids:
-        message_id = message_base.deleted_message_ids.pop()
+        message_id = message_base._deleted_message_ids.pop()
     else:
         message_id = message_base._next_message_id
         message_base._next_message_id
