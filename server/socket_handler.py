@@ -190,8 +190,11 @@ class Server:
 
     # PACKET HANDLER CONTROL FLOW END
 
+    # -----------------------------------------------------
+    
     # CUSTOM PROTOCOL JSON-BASED FUNCTIONS START
 
+    # 0x01: Search Username (json)
     def search_username_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "search_username", "username": <username> }
@@ -206,6 +209,7 @@ class Server:
             "available": available
         }
 
+    # 0x03: Create Account (json)
     def create_account_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "create_account", "username": <username>, "hashed_password": <sha256_hex> }
@@ -220,6 +224,7 @@ class Server:
             "session_token": token
         }
 
+    # 0x05: Log into Account (json)
     def log_into_account_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "log_into_account", "username": <username>, "hashed_password": <sha256_hex> }
@@ -252,7 +257,8 @@ class Server:
                 "session_token": token,
                 "unread_count": unread_count
             }
-        
+
+    # 0x07: Log out of Account (json)
     def log_out_of_account_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "log_out_of_account", "user_id": <user_id>, "session_token": <token> }
@@ -270,6 +276,7 @@ class Server:
                 "opcode": "log_out_of_account_response"
             }
 
+    # 0x09: List Accounts (json)
     def list_accounts_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "list_accounts", "user_id": <user_id>,
@@ -296,6 +303,7 @@ class Server:
                 "accounts": matching_accounts
             }
 
+    # 0x11: Display conversations (json)
     def display_conversation_json(self, request: dict) -> dict:
         """
         Request: { "opcode": "display_conversation", "user_id": <user_id>,
@@ -326,6 +334,11 @@ class Server:
             "messages": messages
         }
 
+    
+
+    # CUSTOM PROTOCOL JSON-BASED FUNCTIONS END
+    
+    # -----------------------------------------------------
 
     # CUSTOM PROTOCOL OP CODE FUNCTIONS START
     
@@ -662,12 +675,12 @@ class Server:
         return full_response
 
     # 0x21: Get user's unread messages
-    # Request format:
-    #   4-byte length, 0x21, 2-byte user ID, 32-byte session token
-    # Response format:
-    #   4-byte length, 0x22, 4-byte number of unread messages,
-    #   then for each message: 4-byte message UID, 2-byte sender ID, 2-byte receiver ID
     def get_unread_messages(self, packet_content: bytes) -> bytes:
+        # Request format:
+        #   4-byte length, 0x21, 2-byte user ID, 32-byte session token
+        # Response format:
+        #   4-byte length, 0x22, 4-byte number of unread messages,
+        #   then for each message: 4-byte message UID, 2-byte sender ID, 2-byte receiver ID
         try:
             # Parse user ID (bytes 5-6) and session token (bytes 7-38)
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')
@@ -709,12 +722,12 @@ class Server:
             return b""
 
     # 0x23: Get message information
-    # Request format:
-    #   4-byte length, 0x23, 2-byte user ID, 32-byte session token, 4-byte message UID
-    # Response format:
-    #   4-byte length, 0x24, 1-byte "has been read" flag,
-    #   2-byte sender ID, 2-byte content length, and message content (UTF-8)
     def get_message_info(self, packet_content: bytes) -> bytes:
+        # Request format:
+        #   4-byte length, 0x23, 2-byte user ID, 32-byte session token, 4-byte message UID
+        # Response format:
+        #   4-byte length, 0x24, 1-byte "has been read" flag,
+        #   2-byte sender ID, 2-byte content length, and message content (UTF-8)
         try:
             # Parse fields from the packet
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')
@@ -761,13 +774,14 @@ class Server:
         except Exception as e:
             print(f"[get_message_info] Exception: {e}")
             return b""
+        
 
     # 0x25: Get username by ID
-    # Request format:
-    #   4-byte length, 0x25, 2-byte user ID
-    # Response format:
-    #   4-byte length, 0x26, 2-byte username length, then username (UTF-8)
     def get_username_by_id(self, packet_content: bytes) -> bytes:
+        # Request format:
+        #   4-byte length, 0x25, 2-byte user ID
+        # Response format:
+        #   4-byte length, 0x26, 2-byte username length, then username (UTF-8)
         try:
             # Parse the user ID (bytes 5-6)
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')
@@ -790,11 +804,12 @@ class Server:
             return b""
 
     # 0x27: Mark message as read
-    # Request format:
-    #   4-byte length, 0x27, 2-byte user ID, 32-byte session token, 4-byte message UID
-    # Response format:
-    #   4-byte length, 0x28 (no additional payload)
     def mark_message_as_read(self, packet_content: bytes) -> bytes:
+        # Request format:
+        #   4-byte length, 0x27, 2-byte user ID, 32-byte session token, 4-byte message UID
+        # Response format:
+        #   4-byte length, 0x28 (no additional payload)
+        
         try:
             # Parse the request: user ID, session token, and message UID
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')

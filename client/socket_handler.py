@@ -124,9 +124,7 @@ class Client:
             status = response[5]
             return status == 0x00
 
-    # -----------------------------------------------------
     # 0x03: Create Account
-    # -----------------------------------------------------
     def create_account(self, username: str, password: str) -> str:
         """
         In binary mode:
@@ -170,9 +168,7 @@ class Client:
             token = response[5:37].hex()
             return token
 
-    # -----------------------------------------------------
     # 0x05: Log into Account
-    # -----------------------------------------------------
     def log_into_account(self, username: str, password: str) -> tuple[bool, str, int]:
         """
         In binary mode:
@@ -225,9 +221,7 @@ class Client:
             unread_count = int.from_bytes(response[38:42], byteorder='big')
             return success, token, unread_count
 
-    # -----------------------------------------------------
     # 0x07: Log out of Account
-    # -----------------------------------------------------
     def log_out_of_account(self, user_id: int, session_token: str) -> None:
         """
         In binary mode:
@@ -265,9 +259,7 @@ class Client:
             if opcode_resp != 0x08:
                 raise Exception("Unexpected opcode in log_out_of_account")
 
-    # -----------------------------------------------------
     # 0x09: List Accounts
-    # -----------------------------------------------------
     def list_accounts(self, user_id: int, session_token: str, wildcard: str) -> list[str]:
         """
         In binary mode:
@@ -326,9 +318,7 @@ class Client:
                 usernames.append(username)
             return usernames
 
-    # -----------------------------------------------------
     # 0x11: Display Conversation
-    # -----------------------------------------------------
     def display_conversation(self, user_id: int, session_token: str, conversant_id: int) -> list[tuple[int, str, bool]]:
         """
         In binary mode:
@@ -394,46 +384,59 @@ class Client:
                 current_pos += msg_length
                 messages.append((msg_id, msg_content, is_sender))
             return messages
-        
+
     # 0x13: Send Message
     def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> None:
         """
-        Opcode 0x13 (Send Message Request); expects a Response (0x14).
-
-        Request format:
-          - 4-byte total length
-          - 0x13
-          - user ID (2 bytes)
-          - session token (32 bytes, hex string on client side -> raw bytes on wire)
-          - recipient ID (2 bytes)
-          - message length (2 bytes)
-          - message content (UTF-8)
-          
-        Response format:
-          - 4-byte total length
-          - 0x14
+        In binary mode:
+        Request: 4-byte length, 0x13, user ID (2 bytes), session token (32 bytes),
+               recipient ID (2 bytes), message length (2 bytes), message (UTF-8)
+        Response: 4-byte total length, 0x14
+              
+        In JSON mode:
+        Request: { "opcode": "send_message",
+                 "user_id": <user_id>,
+                 "session_token": <session_token>,
+                 "recipient_id": <recipient_id>,
+                 "message": <message> }
+        Response: { "opcode": "send_message_response" }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-
-        packet_body = bytes([0x13])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-        packet_body += recipient_id.to_bytes(2, byteorder='big')
-
-        message_bytes = message.encode('utf-8')
-        packet_body += len(message_bytes).to_bytes(2, byteorder='big')
-        packet_body += message_bytes
-        
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for send_message")
-        if response[4] != 0x14:
-            raise Exception(f"Unexpected opcode in send_message response: {response[4]:#04x}")
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "send_message",
+                "user_id": user_id,
+                "session_token": session_token,
+                "recipient_id": recipient_id,
+                "message": message
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "send_message_response":
+                raise Exception("Unexpected opcode in send_message response")
+            return
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            
+            packet_body = bytes([0x13])
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_body += recipient_id.to_bytes(2, byteorder='big')
+            
+            message_bytes = message.encode('utf-8')
+            packet_body += len(message_bytes).to_bytes(2, byteorder='big')
+            packet_body += message_bytes
+            
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for send_message")
+            if response[4] != 0x14:
+                raise Exception(f"Unexpected opcode in send_message response: {response[4]:#04x}")
 
     # 0x15: Read Messages
     def read_messages(self, user_id: int, session_token: str, num_messages: int) -> None:
@@ -534,7 +537,6 @@ class Client:
             raise Exception("Incomplete response for delete_account")
         if response[4] != 0x20:
             raise Exception(f"Unexpected opcode in delete_account response: {response[4]:#04x}")
-
 
     # 0x21: Get Unread Messages
     def get_unread_messages(self, user_id: int, session_token: str) -> list[tuple[int, int, int]]:
