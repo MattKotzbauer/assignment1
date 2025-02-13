@@ -10,24 +10,14 @@ import hashlib
 import json
 
 
-
-
-    # if user:
-        # print(f"Found user: {user.username}")
-        # return user.username
-    # print(f"No user found for ID: {user_id}")
-    # return None
-
-    # print(f"Looking up user object for username: {username}")
-    # user = user_trie.trie.get(username)
-    # if user:
-        # print(f"Found user object: ID={user.userID}")
-    # else:
-        # print(f"No user object found for username: {username}")
-    # return user
-
+def print_usage():
+    """Print usage instructions"""
+    print("Usage: python tkinter_base.py <host> <port>")
+    print("Example: python tkinter_base.py 127.0.0.1 65432")
+    sys.exit(1)
+    
 class ChatInterface:
-    def __init__(self):
+    def __init__(self, host, port):
         print("Initializing ChatInterface...")
         # Initialize the main window
         self.root = tk.Tk()
@@ -43,9 +33,15 @@ class ChatInterface:
         self.current_token = None
         self.message_ids = []
 
+        try:
+            self.client = Client(host=host, port=int(port))
+            self.client.connect()
+        except Exception as e:
+            messagebox.showerror("Connection Error", f"Failed to connect to {host}:{port}\nError: {str(e)}")
+            sys.exit(1)
+        
         # TODO: set as cli parameter
-        self.client = Client(host="127.0.0.1", port=65432)
-        self.client.connect()
+        # self.client.connect()
         
         # Configure grid weights for the root window
         self.root.grid_rowconfigure(0, weight=1)
@@ -645,10 +641,11 @@ class ChatInterface:
         deleted_count = 0
         for index in reversed(selection):
             message_id = self.message_ids[index]
-            if delete_message(message_id):  # Removed current_user_id parameter
-                self.messages_list.delete(index)
-                del self.message_ids[index]
-                deleted_count += 1
+            # if delete_message(message_id):  # Removed current_user_id parameter
+            self.client.delete_message(self.current_user_id, message_id, self.current_token)
+            self.messages_list.delete(index)
+            del self.message_ids[index]
+            deleted_count += 1
         
         # Update the display
         self.refresh_user_list()
@@ -788,5 +785,24 @@ class ChatInterface:
 
 if __name__ == "__main__":
     # Create and run the chat interface
-    chat = ChatInterface()
-    chat.run()
+    if len(sys.argv) != 3:
+        print_usage()
+        
+    host = sys.argv[1]
+    port = sys.argv[2]
+    
+    try:
+        port = int(port)
+        if port < 1 or port > 65535:
+            raise ValueError("Port must be between 1 and 65535")
+    except ValueError as e:
+        print(f"Error: Invalid port number - {str(e)}")
+        print_usage()
+    
+    # Create and run the chat interface
+    try:
+        chat = ChatInterface(host, port)
+        chat.run()
+    except Exception as e:
+        print(f"Failed to start chat application: {str(e)}")
+        sys.exit(1)
