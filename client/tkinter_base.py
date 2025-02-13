@@ -53,6 +53,7 @@ class ChatInterface:
 
         # TODO: set as cli parameter
         self.client = Client(host="127.0.0.1", port=12345)
+        self.client.connect()
         
         # Configure grid weights for the root window
         self.root.grid_rowconfigure(0, weight=1)
@@ -529,54 +530,71 @@ class ChatInterface:
             
         # Extract username from display text (remove message count if present)
         selected_username = selected_text.split(' (MESSAGES:')[0]
-        selected_user = get_user_by_username(selected_username)
-        if not selected_user:
+        # selected_user = get_user_by_username(selected_username)
+        selected_userID = self.get_userID_by_username(selected_username)
+        if not selected_userID:
             return
         
         # Get all messages between current user and selected user
-        conversation_key = tuple(sorted([self.current_user_id, selected_user.userID]))
-        if conversation_key not in conversations.conversations:
+        conversation_key = tuple(sorted([self.current_user_id, selected_userID]))
+        # if conversation_key not in conversations.conversations:
+            # self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
+            # return
+        curr_conversation = self.client.display_conversation(self.current_user_id, self.current_token, selected_userID)
+        if not curr_conversation:
             self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
             return
         
+        
         # Get messages for the current conversation
-        messages = conversations.conversations[conversation_key]
+        
+        # messages = conversations.conversations[conversation_key]
         # messages = self.client.display_conversation() self.current_user_id, current.token, RECEIVER_ID
-        messages.sort(key=lambda x: x.uid)  # Sort by message ID to maintain order
+        # messages.sort(key=lambda x: x.uid)  # Sort by message ID to maintain order
+        # curr_conversation.sort(key = lambda c: c[0]) # (idt we need to sort that right)
+
+        
+        # (for each element in curr_conversation: c[0] = UID: int, c[1] = content: str, c[2] = isSender: bool)
         
         # Separate unread and read messages
         unread_messages = []
         read_messages = []
         
-        for msg in messages:
-            if msg.sender_id == self.current_user_id:
-                read_messages.append((msg, f"You: {msg.contents}"))
+        for conv_msg in curr_conversation:
+            if conv_msg[2]:
+                read_messages.append((conv_msg, f"You: {conv_msg[1]}"))
             else:
-                sender_username = get_username_by_id(msg.sender_id)
-                if not msg.has_been_read:
-                    unread_messages.append((msg, f"{sender_username}: {msg.contents}"))
+                # sender_username = get_username_by_id(msg.sender_id)
+                # message_info: [0]: has_been_read: bool, [1]: sender ID: int, [2]: content: str
+                message_info = self.client.get_message_info(self.current_user_id, self.current_token, conv_msg[0])
+                
+                # if not msg.has_been_read:
+                if not message_info[0]: 
+                    unread_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
                     if mark_as_read:  # Mark as read if requested
-                        msg.has_been_read = True
+                        # msg.has_been_read = True
+                        self.client.mark_message_as_read(self.current_user_id, self.current_token, conv_msg[0])
+                        
                         # mark_messages_as_read(self.current_user_id, 1)
                         self.client.read_messages(self.current_user_id, self.current_token, 1)
                 else:
-                    read_messages.append((msg, f"{sender_username}: {msg.contents}"))
+                    read_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
         
         # Display unread messages first if any
         if unread_messages:
             self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
-            for msg, text in unread_messages:
+            for conv_msg, text in unread_messages:
                 self.messages_list.insert(tk.END, text)
-                self.message_ids.append(msg.uid)
+                self.message_ids.append(conv_msg[0])
                 self.messages_list.itemconfig(tk.END, fg='red')
             
             # Add separator
             self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
         
         # Display read messages
-        for msg, text in read_messages:
+        for conv_msg, text in read_messages:
             self.messages_list.insert(tk.END, text)
-            self.message_ids.append(msg.uid)
+            self.message_ids.append(conv_msg[0])
         
         # Scroll to show unread messages if any, otherwise scroll to bottom
         if unread_messages and not mark_as_read:
@@ -640,10 +658,15 @@ class ChatInterface:
             # Get the message ID and mark it as read
             if index < len(self.message_ids):
                 message_id = self.message_ids[index]
-                message = message_base.messages.get(message_id)
+                # TODO: FIX
+                # message = message_base.messages.get(message_id)
+
+                # msg_info: [0]: has_been_read, [1]: sender ID, [2]: content
+                msg_info = self.client.get_message_info(self.current_user_id, self.current_token, message_id)
                 
-                if message and not message.has_been_read and message.sender_id != self.current_user_id:
-                    message.has_been_read = True
+                if msg_info and not msg_info[0] and msg_info[2] != self.current_user_id:
+                    # message.has_been_read = True
+                    self.client.mark_message_as_read(self.current_user_id, self.current_token, msg_info[0])
                     # mark_messages_as_read(self.current_user_id, 1)
                     self.client.read_messages(self.current_user_id)
                     # Update the message display
@@ -669,8 +692,9 @@ class ChatInterface:
         # If user has unread messages, mark them as read
         if '(MESSAGES:' in selected_text:
             username = selected_text.split(' (MESSAGES:')[0]
-            selected_user = get_user_by_username(username)
-            if selected_user:
+            # selected_user = get_user_by_username(username)
+            selected_userID = self.get_userID_by_username(username)
+            if selected_userID:
                 # Display messages with mark_as_read=True to mark them as read
                 self.display_messages(mark_as_read=True)
                 # Refresh the user list to move the user to the regular section
@@ -715,7 +739,7 @@ class ChatInterface:
                     # create_account(username, self.client.hash_password(password))
                     self.client.create_account(username, self.client.hash_password(password))
             except Exception as e:
-                print(f"Error creating user {username}: {es}")
+                print(f"Error creating user {username}: {e}")
         
         # Print test accounts
         print("Test accounts created:")
@@ -748,5 +772,6 @@ class ChatInterface:
 
 if __name__ == "__main__":
     # Create and run the chat interface
+    
     chat = ChatInterface()
     chat.run()
