@@ -1,4 +1,6 @@
-# Chat Application
+# CS2620 Problem Set 1: Chat Application + Custom Wire Protocol
+
+
 
 A Python-based chat application implementing both custom wire protocol and JSON-based communication.
 
@@ -45,18 +47,23 @@ python3 -c "import tkinter; tkinter._test()"
 
 Host the server: 
 ```bash
-python server/socket_handler.py
+python server/socket_handler.py {IP} {PORT}
 ```
 
-Simulate a client: 
+Run the GUI client: 
+```bash
+python client/tkinter_base.py {IP} {PORT}
+```
+
+Make sure that the IP and Port you connect to from the client match those of the server. To run locally on a machine, '127.0.0.1' or 'localhost' can be specified as an IP address. To run on multiple machines, the server's IP address must match the actual IP address of the machine running the server, and both machines need to be on the same network. Choosing a port above 1024 helps to avoid the necessary admin priveleges that the lower ports often require (with the maximum valid port number being 65535). 
+
+Simulate a client using Python: 
 ```python
 # (Within client.py directory)
-
 import client
 sample_client = Client(host = '127.0.0.1', port = 65432)
 client.connect()
 # (API calls can the be accessed with client.{function_name})
-
 ```
 
 Run the application:
