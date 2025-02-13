@@ -898,6 +898,7 @@ class Server:
         #   4-byte length, 0x25, 2-byte user ID
         # Response format:
         #   4-byte length, 0x26, 2-byte username length, then username (UTF-8)
+        print("BARBAZ")
         try:
             # Parse the user ID (bytes 5-6)
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')
@@ -914,7 +915,6 @@ class Server:
             response_body += username_bytes
             length_header = len(response_body).to_bytes(4, byteorder='big')
             return length_header + response_body
-
         except Exception as e:
             print(f"[get_username_by_id] Exception: {e}")
             return b""
@@ -998,9 +998,9 @@ class Server:
                 response_body.append(0x01)  # Status: not found
                 print(f"[get_user_by_username] Username '{username}' not found.")
                 
-                # Prepend length header.
-                response_length = len(response_body).to_bytes(4, byteorder='big')
-                return response_length + response_body
+            # Prepend length header.
+            response_length = len(response_body).to_bytes(4, byteorder='big')
+            return response_length + response_body
             
         except Exception as e:
             print(f"[get_user_by_username] Exception: {e}")

@@ -11,21 +11,13 @@ import json
 
 
 
-def get_username_by_id(user_id: int) -> str:
-    """Get username by user ID"""
-    print(f"Looking up username for ID: {user_id}")
-    # user = user_base.users.get(user_id)
-    username = self.client.get_username_by_id(user_id)
-    return username # (returns None if empty)
+
     # if user:
         # print(f"Found user: {user.username}")
         # return user.username
     # print(f"No user found for ID: {user_id}")
     # return None
 
-def get_userID_by_username(username: str) -> int:
-    found, user_id = self.client.get_user_by_username(username)
-    return user_id if found else 0
     # print(f"Looking up user object for username: {username}")
     # user = user_trie.trie.get(username)
     # if user:
@@ -52,7 +44,7 @@ class ChatInterface:
         self.message_ids = []
 
         # TODO: set as cli parameter
-        self.client = Client(host="127.0.0.1", port=12345)
+        self.client = Client(host="127.0.0.1", port=65432)
         self.client.connect()
         
         # Configure grid weights for the root window
@@ -62,6 +54,19 @@ class ChatInterface:
         print("Showing login screen...")
         # Show login screen first
         self.show_login_screen()
+    
+    def get_username_by_id(self, user_id: int) -> str:
+        """Get username by user ID"""
+        print(f"Looking up username for ID: {user_id}")
+        # user = user_base.users.get(user_id)
+        username = self.client.get_username_by_id(user_id)
+        return username # (returns None if empty)
+
+
+    def get_userID_by_username(self, username: str) -> int:
+        print("OOF2")
+        found, user_id = self.client.get_user_by_username(username)
+        return user_id if found else 0
     
     def show_login_screen(self):
         print("Setting up login screen...")
@@ -187,7 +192,7 @@ class ChatInterface:
         
         # Check if user exists
         print(f"Looking up user object for username: {username}")
-        userID = get_userID_by_username(username) # (valid)
+        userID = self.get_userID_by_username(username) # (valid)
         print(f"User lookup result: {userID}")
         
         # Handle non-existent user
@@ -213,7 +218,9 @@ class ChatInterface:
                 print("3. Creating new account...")
                 try:
                     self.current_token = self.client.create_account(username, hashed_password)
-                    userID = get_userID_by_username(username)
+                    print("FOO")
+                    userID = self.get_userID_by_username(username)
+                    print("BAR")
                     if not userID:
                         raise Exception("Failed to create account")
                     
@@ -435,7 +442,7 @@ class ChatInterface:
             self.users_list.delete(0, tk.END)
             
             print("2. Getting current username...")
-            current_username = get_username_by_id(self.current_user_id)
+            current_username = self.get_username_by_id(self.current_user_id)
             # TODO: 
             current_user = user_base.users.get(self.current_user_id)
             print(f"Current username: {current_username}")
@@ -453,7 +460,7 @@ class ChatInterface:
             for msg_id in current_user.unread_messages:
                 msg = message_base.messages.get(msg_id)
                 if msg:
-                    sender_username = get_username_by_id(msg.sender_id)
+                    sender_username = self.get_username_by_id(msg.sender_id)
                     if sender_username:
                         unread_users.add(sender_username)
                         unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
@@ -760,7 +767,7 @@ class ChatInterface:
             return
             
         # unread_count = len(user.unread_messages)
-        unread_message_data = self.client.get_unread_messages(self.current_user_ID, self.current_token)
+        unread_message_data = self.client.get_unread_messages(self.current_user_id, self.current_token)
         unread_count = len(unread_message_data)
         if unread_count == 0:
             self.unread_label.config(text="No unread messages", foreground="#666666")
@@ -772,6 +779,5 @@ class ChatInterface:
 
 if __name__ == "__main__":
     # Create and run the chat interface
-    
     chat = ChatInterface()
     chat.run()

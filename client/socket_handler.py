@@ -63,7 +63,7 @@ class Client:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
 
-    def hash_password(password: str):
+    def hash_password(self, password: str):
         return hashlib.sha256(password.encode()).hexdigest()
         
     def build_packet(self, opcode: int, payload: bytes) -> bytes:
