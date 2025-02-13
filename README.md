@@ -43,6 +43,22 @@ python3 -c "import tkinter; tkinter._test()"
 
 ### Running the Application GUI
 
+Host the server: 
+```bash
+python server/socket_handler.py
+```
+
+Simulate a client: 
+```python
+# (Within client.py directory)
+
+import client
+sample_client = Client(host = '127.0.0.1', port = 65432)
+client.connect()
+# (API calls can the be accessed with client.{function_name})
+
+```
+
 Run the application:
 ```bash
 python3 tkinter_base.py
