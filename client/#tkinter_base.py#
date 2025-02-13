@@ -729,7 +729,7 @@ class ChatInterface:
         
         # If this is a different user than before, mark previous messages as read
         if hasattr(self, 'previous_selected_user') and self.previous_selected_user != selected_username:
-            self.display_messages(mark_as_read=False)  # Mark previous conversation as read
+            self.display_messagecds(mark_as_read=False)  # Mark previous conversation as read
         
         self.previous_selected_user = selected_username
         self.selected_user_label.config(text=f"Selected: {selected_username}")
