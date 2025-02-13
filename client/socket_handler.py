@@ -8,7 +8,7 @@ import json
 
 class Client:
     # GENERAL-FORM SOCKET FN's START
-    def __init__(self, host: str = "127.0.0.1", port: int = 65432, use_json: bool = False):
+    def __init__(self, host: str, port: int, use_json: bool = False):
         self.host = host
         self.port = port
         self.use_json = use_json
@@ -63,7 +63,7 @@ class Client:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
 
-    def hash_password(password: str):
+    def hash_password(self, password: str):
         return hashlib.sha256(password.encode()).hexdigest()
         
     def build_packet(self, opcode: int, payload: bytes) -> bytes:

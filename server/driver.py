@@ -381,15 +381,15 @@ def populate_test_data():
 
 if __name__ == "__main__":
     # Populate test data before starting the application
-    populate_test_data()
+    # populate_test_data()
     
     # Print out the test accounts for easy reference
-    print("Test accounts created:")
-    print("Username: alice, Password: test123")
-    print("Username: bob, Password: test123")
-    print("Username: charlie, Password: test123")
-    print("Username: david, Password: test123")
-    print("Username: eve, Password: test123")
+    # print("Test accounts created:")
+    # print("Username: alice, Password: test123")
+    # print("Username: bob, Password: test123")
+    # print("Username: charlie, Password: test123")
+    # print("Username: david, Password: test123")
+    # print("Username: eve, Password: test123")
     
     create_window()
 

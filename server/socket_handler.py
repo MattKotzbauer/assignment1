@@ -11,7 +11,7 @@ from core_entities import Message, User
 
 class Server:
     # GENERAL-FORM SOCKET FN's START
-    def __init__(self, host: str = "127.0.0.1", port: int = 65432):
+    def __init__(self, host: str, port: int):
         self.host = host
         self.port = port
         self.sel = selectors.DefaultSelector()
@@ -614,9 +614,9 @@ class Server:
             uname_length = len(username_bytes)
             response_body += uname_length.to_bytes(2, byteorder='big') + username_bytes
             
-            response_length = len(response_body).to_bytes(4, byteorder='big')
-            full_response = response_length + response_body
-            return full_response
+        response_length = len(response_body).to_bytes(4, byteorder='big')
+        full_response = response_length + response_body
+        return full_response
     
     # 0x11: Display Conversation
     def display_conversation(self, packet_content: bytes) -> bytes:
@@ -914,7 +914,6 @@ class Server:
             response_body += username_bytes
             length_header = len(response_body).to_bytes(4, byteorder='big')
             return length_header + response_body
-
         except Exception as e:
             print(f"[get_username_by_id] Exception: {e}")
             return b""
@@ -998,25 +997,22 @@ class Server:
                 response_body.append(0x01)  # Status: not found
                 print(f"[get_user_by_username] Username '{username}' not found.")
                 
-                # Prepend length header.
-                response_length = len(response_body).to_bytes(4, byteorder='big')
-                return response_length + response_body
+            # Prepend length header.
+            response_length = len(response_body).to_bytes(4, byteorder='big')
+            return response_length + response_body
             
         except Exception as e:
             print(f"[get_user_by_username] Exception: {e}")
             # On error, return a response with not found status.
             response_body = bytearray([0x2A, 0x01])
             response_length = len(response_body).to_bytes(4, byteorder='big')
-            return response_length + response_body
-
+            return response_length + response_bod
         
-    # OP CODE FUNCTIONS END
-       
-    
+    # CUSTOM PROTOCOL OP CODE FUNCTIONS END
+
+    # ----------------------------------------------------- 
 
 if __name__ == "__main__":
-    host = "127.0.0.1"
-    port = 65432
     
     args = sys.argv[1:]
     if len(args) >= 1:
