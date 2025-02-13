@@ -898,7 +898,6 @@ class Server:
         #   4-byte length, 0x25, 2-byte user ID
         # Response format:
         #   4-byte length, 0x26, 2-byte username length, then username (UTF-8)
-        print("BARBAZ")
         try:
             # Parse the user ID (bytes 5-6)
             user_id = int.from_bytes(packet_content[5:7], byteorder='big')

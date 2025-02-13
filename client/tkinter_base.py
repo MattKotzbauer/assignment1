@@ -64,7 +64,7 @@ class ChatInterface:
 
 
     def get_userID_by_username(self, username: str) -> int:
-        print("OOF2")
+        print(f"Finding ID for username: {username}")
         found, user_id = self.client.get_user_by_username(username)
         return user_id if found else 0
     
@@ -218,9 +218,7 @@ class ChatInterface:
                 print("3. Creating new account...")
                 try:
                     self.current_token = self.client.create_account(username, hashed_password)
-                    print("FOO")
                     userID = self.get_userID_by_username(username)
-                    print("BAR")
                     if not userID:
                         raise Exception("Failed to create account")
                     
@@ -250,7 +248,8 @@ class ChatInterface:
             # self.current_token = check_password(username, hashed_password)
             login_result = self.client.log_into_account(username, hashed_password)
             self.current_token = login_result[1]
-            self.current_user_id = user.userID
+            # self.current_user_id = user.userID
+            self.current_user_id = self.get_userID_by_username(username)
             print("Login successful")
             self.show_main_screen()
             messagebox.showinfo(
@@ -444,12 +443,13 @@ class ChatInterface:
             print("2. Getting current username...")
             current_username = self.get_username_by_id(self.current_user_id)
             # TODO: 
-            current_user = user_base.users.get(self.current_user_id)
+            # current_user = user_base.users.get(self.current_user_id)
+            # current_userID = self.get_userID_by_username(current_username)
             print(f"Current username: {current_username}")
             
             print("3. Getting all users...")
             # users = list_accounts("*")
-            users = self.client.list_accounts("*")
+            users = self.client.list_accounts(self.current_user_id, self.current_token, "*")
             print(f"Found {len(users)} users: {users}")
             
             # Get users with unread messages first
@@ -457,13 +457,23 @@ class ChatInterface:
             unread_counts = {}
             
             # Count unread messages per sender
-            for msg_id in current_user.unread_messages:
-                msg = message_base.messages.get(msg_id)
-                if msg:
-                    sender_username = self.get_username_by_id(msg.sender_id)
+            # c[0]: message UID, c[1]: sender ID, c[2]: receiver ID
+            current_unread_messages = self.client.get_unread_messages(self.current_user_id, self.current_token)
+            for c in current_unread_messages:
+                curr_msg = get_message_info(self.current_user_id, self.current_token, c[0])
+                if curr_msg:
+                    sender_username = self.get_username_by_id(c[1])
                     if sender_username:
                         unread_users.add(sender_username)
                         unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
+                        
+            # for msg_id in current_user.unread_messages:
+                # msg = message_base.messages.get(msg_id)
+                # if msg:
+                    # sender_username = self.get_username_by_id(msg.sender_id)
+                    # if sender_username:
+                        # unread_users.add(sender_username)
+                        # unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
             
             # Add users with unread messages at the top
             if unread_users:
@@ -501,11 +511,11 @@ class ChatInterface:
             return
         
         recipient_username = self.users_list.get(selection[0])
-        recipient = get_user_by_username(recipient_username)
-        if not recipient:
+        # recipient = get_user_by_username(recipient_username)  # FIX
+        recipient_id = self.get_userID_by_username(recipient_username)
+        if not recipient_id:
             messagebox.showerror("Error", "Recipient does not exist")
             return
-        recipient_id = recipient.userID  # Get the recipient's user ID
 
         # Send message (TODO: error handling display in case of packet error??)
         self.client.send_message(self.current_user_id, self.current_token, recipient_id, message)
