@@ -118,6 +118,14 @@ class ChatInterface:
         self.username_entry.focus()
         print("Login screen setup complete")
     
+    def check_messages(self):
+        """Periodically check for new messages and update the display"""
+        if self.current_user_id and self.current_token:  # Only check if logged in
+            self.refresh_user_list()
+            self.update_unread_count()
+            # Check messages every 3 seconds
+            self.root.after(3000, self.check_messages)
+
     def show_main_screen(self):
         print("\n=== Setting up main screen... ===\n")
         try:
@@ -165,6 +173,9 @@ class ChatInterface:
             self.display_messages()
             self.update_unread_count()
             self.root.update()
+            
+            # Start periodic message checking
+            self.check_messages()
             
             print("\n=== Main screen setup complete ===\n")
             
@@ -433,6 +444,16 @@ class ChatInterface:
         """Refresh the list of available users"""
         print("\n=== Refreshing user list... ===\n")
         try:
+            # Store current selection if any
+            current_selection = None
+            selected_indices = self.users_list.curselection()
+            if selected_indices:
+                current_selection = self.users_list.get(selected_indices[0])
+                if '[NEW]' in current_selection:
+                    current_selection = current_selection.replace('[NEW] ', '')
+                if ' (UNREAD:' in current_selection:
+                    current_selection = current_selection.split(' (UNREAD:')[0]
+            
             print("1. Clearing user list...")
             self.users_list.delete(0, tk.END)
             
@@ -476,7 +497,7 @@ class ChatInterface:
                 self.users_list.insert(tk.END, "━━━ Unread Messages ━━━")
                 for username in sorted(unread_users):
                     if username != current_username:
-                        display_text = f"{username} (MESSAGES: {unread_counts[username]})"
+                        display_text = f"[NEW] {username} (UNREAD: {unread_counts[username]})"
                         self.users_list.insert(tk.END, display_text)
                         self.users_list.itemconfig(tk.END, fg='red')
                 
@@ -487,6 +508,16 @@ class ChatInterface:
             for username in sorted(users):
                 if username != current_username and username not in unread_users:
                     self.users_list.insert(tk.END, username)
+            
+            # Restore selection if it still exists
+            if current_selection:
+                for i in range(self.users_list.size()):
+                    item = self.users_list.get(i)
+                    clean_item = item.replace('[NEW] ', '').split(' (UNREAD:')[0]
+                    if clean_item == current_selection:
+                        self.users_list.selection_set(i)
+                        self.users_list.see(i)  # Ensure the selected item is visible
+                        break
             
             print("\n=== User list refresh complete ===\n")
         except Exception as e:
@@ -506,8 +537,13 @@ class ChatInterface:
             messagebox.showerror("Error", "Please select a recipient")
             return
         
-        recipient_username = self.users_list.get(selection[0])
-        # recipient = get_user_by_username(recipient_username)  # FIX
+        recipient_text = self.users_list.get(selection[0])
+        if '━' in recipient_text:  # Skip if separator selected
+            messagebox.showerror("Error", "Please select a valid user")
+            return
+            
+        # Remove [NEW] prefix and unread count if present
+        recipient_username = recipient_text.replace('[NEW] ', '').split(' (UNREAD:')[0]
         recipient_id = self.get_userID_by_username(recipient_username)
         if not recipient_id:
             messagebox.showerror("Error", "Recipient does not exist")
@@ -541,8 +577,8 @@ class ChatInterface:
         if '━' in selected_text:  # Skip if separator selected
             return
             
-        # Extract username from display text (remove message count if present)
-        selected_username = selected_text.split(' (MESSAGES:')[0]
+        # Extract username from display text (remove unread count if present)
+        selected_username = selected_text.split(' (UNREAD:')[0] if ' (UNREAD:' in selected_text else selected_text
         # selected_user = get_user_by_username(selected_username)
         selected_userID = self.get_userID_by_username(selected_username)
         if not selected_userID:
@@ -584,12 +620,11 @@ class ChatInterface:
                 # if not msg.has_been_read:
                 if not message_info[0]: 
                     unread_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
-                    if mark_as_read:  # Mark as read if requested
-                        # msg.has_been_read = True
-                        self.client.mark_message_as_read(self.current_user_id, self.current_token, conv_msg[0])
-                        
-                        # mark_messages_as_read(self.current_user_id, 1)
-                        self.client.read_messages(self.current_user_id, self.current_token, 1)
+                    # Always mark messages as read when viewing them
+                    self.client.mark_message_as_read(self.current_user_id, self.current_token, conv_msg[0])
+                    self.client.read_messages(self.current_user_id, self.current_token, 1)
+                    # Refresh the user list to update unread counts
+                    self.refresh_user_list()
                 else:
                     read_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
         

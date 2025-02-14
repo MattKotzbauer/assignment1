@@ -115,6 +115,14 @@ class ChatInterface:
         self.username_entry.focus()
         print("Login screen setup complete")
     
+    def check_messages(self):
+        """Periodically check for new messages and update the display"""
+        if self.current_user_id:  # Only check if logged in
+            self.refresh_user_list()
+            self.update_unread_count()
+            # Check messages every 2 seconds
+            self.root.after(2000, self.check_messages)
+
     def show_main_screen(self):
         print("\n=== Setting up main screen... ===\n")
         try:
@@ -162,6 +170,9 @@ class ChatInterface:
             self.display_messages()
             self.update_unread_count()
             self.root.update()
+            
+            # Start periodic message checking
+            self.check_messages()
             
             print("\n=== Main screen setup complete ===\n")
             
@@ -449,7 +460,7 @@ class ChatInterface:
                 self.users_list.insert(tk.END, "━━━ Unread Messages ━━━")
                 for username in sorted(unread_users):
                     if username != current_username:
-                        display_text = f"{username} (MESSAGES: {unread_counts[username]})"
+                        display_text = f"{username} (UNREAD: {unread_counts[username]})"
                         self.users_list.insert(tk.END, display_text)
                         self.users_list.itemconfig(tk.END, fg='red')
                 
@@ -509,8 +520,8 @@ class ChatInterface:
         if '━' in selected_text:  # Skip if separator selected
             return
             
-        # Extract username from display text (remove message count if present)
-        selected_username = selected_text.split(' (MESSAGES:')[0]
+        # Extract username from display text (remove unread count if present)
+        selected_username = selected_text.split(' (UNREAD:')[0] if ' (UNREAD:' in selected_text else selected_text
         selected_user = get_user_by_username(selected_username)
         if not selected_user:
             return
@@ -538,7 +549,7 @@ class ChatInterface:
                     unread_messages.append((msg, f"{sender_username}: {msg.contents}"))
                     if mark_as_read:  # Mark as read if requested
                         msg.has_been_read = True
-                        mark_messages_as_read(self.current_user_id, 1)
+                        user_base.users[self.current_user_id].mark_message_read(msg.uid)
                 else:
                     read_messages.append((msg, f"{sender_username}: {msg.contents}"))
         
