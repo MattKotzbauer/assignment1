@@ -1,5 +1,5 @@
 
-# Data Testing
+# Data Testing: 
 
 These tests can be replicated by running `client/run_data_operations_test.py`. In this case, we create an instance of our Client class that bypasses the standard server-side API calls and manually defines our return type to be the amount of data within the packet. Within our set of sample queries, we found the following data measurements for our base operations: 
 
@@ -31,11 +31,17 @@ These tests can be replicated by running `client/run_data_operations_test.py`. I
 
 In this case, the merit of using our custom wire protocol is clear, ranging from being **3x - 5x more compact** than our JSON system. One could argue that an advantage of the JSON system is its simplicity: our method of casting our input fields in and out of dictionaries is far easier than building out new functionality for the wire protocol, where we specify the size and type of each field so that we can pass in our raw data without padding. But the advantage of this system with respect to memory savings is clear, and would be especially advantageous if we were processing a lot of packets at once and / or challenging the bandwidth of our network connection. 
 
-# 
+
+# Engineering Notebook / Build Log: 
 
 ---
 
 ## 02/05/2025 — Refining Data Models & Wire Protocol
+
+**Thought Process:**
+- In building this system, we see our first priority as establishing a set of underlying classes that we can phrase our operations in terms of 
+- We arrived at a solution of categorizing our data in terms of 'Users' and 'Messages', where the former represents the current session and relationships of the user logging in, and the latter is the content of the messages they send, view, and delete
+- Within these, we feel that for both Users and Messages, we want a hashmap routing their unique ID to their metadata. Further, a Trie could be useful for quickly searching usernames, while an additional conversation-based mapping system could be useful for quickly accessing conversation results
 
 **Focus:**
 - Refined our data models based on initial designs.
