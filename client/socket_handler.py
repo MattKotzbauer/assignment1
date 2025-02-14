@@ -441,333 +441,393 @@ class Client:
     # 0x15: Read Messages
     def read_messages(self, user_id: int, session_token: str, num_messages: int) -> None:
         """
-        Opcode 0x15 (Read Messages); expects a Response (0x16).
+        In binary mode:
+          Request: 4-byte length, 0x15, user ID (2 bytes), session token (32 bytes),
+                   number of desired messages (4 bytes)
+          Response: 4-byte total length, 0x16
 
-        Request format:
-          - 4-byte total length
-          - 0x15
-          - user ID (2 bytes)
-          - session token (32 bytes, hex -> raw)
-          - number of desired messages (4 bytes)
-          
-        Response format:
-          - 4-byte total length
-          - 0x16
+        In JSON mode:
+          Request: { "opcode": "read_messages",
+                     "user_id": user_id,
+                     "session_token": session_token,
+                     "num_messages": num_messages }
+          Response: { "opcode": "read_messages_response" }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-
-        packet_body = bytes([0x15])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-        packet_body += num_messages.to_bytes(4, byteorder='big')
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for read_messages")
-        if response[4] != 0x16:
-            raise Exception(f"Unexpected opcode in read_messages response: {response[4]:#04x}")
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "read_messages",
+                "user_id": user_id,
+                "session_token": session_token,
+                "num_messages": num_messages
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "read_messages_response":
+                raise Exception("Unexpected opcode in read_messages response")
+            return
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytes([0x15])
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_body += num_messages.to_bytes(4, byteorder='big')
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for read_messages")
+            if response[4] != 0x16:
+                raise Exception(f"Unexpected opcode in read_messages response: {response[4]:#04x}")
 
     # 0x17: Delete Message
     def delete_message(self, user_id: int, message_uid: int, session_token: str) -> None:
         """
-        Opcode 0x17 (Delete Message); expects a Response (0x18).
+        In binary mode:
+          Request: 4-byte length, 0x17, user ID (2 bytes), message UID (4 bytes),
+                   session token (32 bytes)
+          Response: 4-byte total length, 0x18
 
-        Request format:
-          - 4-byte total length
-          - 0x17
-          - user ID (2 bytes)
-          - message UID (4 bytes)
-          - session token (32 bytes, hex -> raw)
-          
-        Response format:
-          - 4-byte total length
-          - 0x18
+        In JSON mode:
+          Request: { "opcode": "delete_message",
+                     "user_id": user_id,
+                     "message_uid": message_uid,
+                     "session_token": session_token }
+          Response: { "opcode": "delete_message_response" }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-
-        packet_body = bytes([0x17])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += message_uid.to_bytes(4, byteorder='big')
-        packet_body += token_bytes
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for delete_message")
-        if response[4] != 0x18:
-            raise Exception(f"Unexpected opcode in delete_message response: {response[4]:#04x}")
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "delete_message",
+                "user_id": user_id,
+                "message_uid": message_uid,
+                "session_token": session_token
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "delete_message_response":
+                raise Exception("Unexpected opcode in delete_message response")
+            return
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytes([0x17])
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += message_uid.to_bytes(4, byteorder='big')
+            packet_body += token_bytes
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for delete_message")
+            if response[4] != 0x18:
+                raise Exception(f"Unexpected opcode in delete_message response: {response[4]:#04x}")
 
     # 0x19: Delete Account
     def delete_account(self, user_id: int, session_token: str) -> None:
         """
-        Opcode 0x19 (Delete Account); expects a Response (0x20).
+        In binary mode:
+          Request: 4-byte length, 0x19, user ID (2 bytes), session token (32 bytes)
+          Response: 4-byte total length, 0x20
 
-        Request format:
-          - 4-byte total length
-          - 0x19
-          - user ID (2 bytes)
-          - session token (32 bytes, hex -> raw)
-          
-        Response format:
-          - 4-byte total length
-          - 0x20
+        In JSON mode:
+          Request: { "opcode": "delete_account",
+                     "user_id": user_id,
+                     "session_token": session_token }
+          Response: { "opcode": "delete_account_response" }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-
-        packet_body = bytes([0x19])
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for delete_account")
-        if response[4] != 0x20:
-            raise Exception(f"Unexpected opcode in delete_account response: {response[4]:#04x}")
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "delete_account",
+                "user_id": user_id,
+                "session_token": session_token
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "delete_account_response":
+                raise Exception("Unexpected opcode in delete_account response")
+            return
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytes([0x19])
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for delete_account")
+            if response[4] != 0x20:
+                raise Exception(f"Unexpected opcode in delete_account response: {response[4]:#04x}")
 
     # 0x21: Get Unread Messages
     def get_unread_messages(self, user_id: int, session_token: str) -> list[tuple[int, int, int]]:
         """
-        Opcode 0x21 (Get Unread Messages Request) and expects a Response (0x22).
+        In binary mode:
+          Request: 4-byte length, 0x21, user ID (2 bytes), session token (32 bytes)
+          Response: 4-byte total length, 0x22, 4-byte count, then for each message:
+                    message UID (4 bytes), sender ID (2 bytes), receiver ID (2 bytes)
 
-        Request format:
-          - 4-byte total length
-          - 0x21
-          - user ID (2 bytes)
-          - session token (32 bytes, hex string converted to raw bytes)
-
-        Response format:
-          - 4-byte total length
-          - 0x22
-          - number of unread messages (4 bytes)
-            For each unread message:
-              * message UID (4 bytes)
-              * sender ID (2 bytes)
-              * receiver ID (2 bytes)
+        In JSON mode:
+          Request: { "opcode": "get_unread_messages",
+                     "user_id": user_id,
+                     "session_token": session_token }
+          Response: { "opcode": "get_unread_messages_response",
+                      "unread_messages": [ { "message_uid": <int>, "sender_id": <int>, "receiver_id": <int> }, ... ] }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-
-        packet_body = bytearray()
-        packet_body.append(0x21)
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for get_unread_messages")
-        if response[4] != 0x22:
-            raise Exception(f"Unexpected opcode in get_unread_messages response: {response[4]:#04x}")
-
-        # Parse the number of unread messages (bytes 5 to 8)
-        if len(response) < 9:
-            raise Exception("Incomplete response: missing unread messages count")
-        num_unread = int.from_bytes(response[5:9], byteorder='big')
-
-        messages = []
-        offset = 9
-        expected_length = offset + num_unread * 8  # each message entry is 8 bytes
-        if len(response) < expected_length:
-            raise Exception("Incomplete response: not all unread messages received")
-        for _ in range(num_unread):
-            msg_uid = int.from_bytes(response[offset:offset+4], byteorder='big')
-            sender_id = int.from_bytes(response[offset+4:offset+6], byteorder='big')
-            receiver_id = int.from_bytes(response[offset+6:offset+8], byteorder='big')
-            messages.append((msg_uid, sender_id, receiver_id))
-            offset += 8
-
-        return messages
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "get_unread_messages",
+                "user_id": user_id,
+                "session_token": session_token
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "get_unread_messages_response":
+                raise Exception("Unexpected opcode in get_unread_messages response")
+            messages = []
+            for msg in response_data.get("unread_messages", []):
+                messages.append((msg.get("message_uid"), msg.get("sender_id"), msg.get("receiver_id")))
+            return messages
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytearray()
+            packet_body.append(0x21)
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for get_unread_messages")
+            if response[4] != 0x22:
+                raise Exception(f"Unexpected opcode in get_unread_messages response: {response[4]:#04x}")
+            if len(response) < 9:
+                raise Exception("Incomplete response: missing unread messages count")
+            num_unread = int.from_bytes(response[5:9], byteorder='big')
+            messages = []
+            offset = 9
+            expected_length = offset + num_unread * 8
+            if len(response) < expected_length:
+                raise Exception("Incomplete response: not all unread messages received")
+            for _ in range(num_unread):
+                msg_uid = int.from_bytes(response[offset:offset+4], byteorder='big')
+                sender_id = int.from_bytes(response[offset+4:offset+6], byteorder='big')
+                receiver_id = int.from_bytes(response[offset+6:offset+8], byteorder='big')
+                messages.append((msg_uid, sender_id, receiver_id))
+                offset += 8
+            return messages
 
     # 0x23: Get Message Information
     def get_message_info(self, user_id: int, session_token: str, message_uid: int) -> tuple[bool, int, str]:
         """
-        Opcode 0x23 (Get Message Information Request) and expects a Response (0x24).
+        In binary mode:
+          Request: 4-byte length, 0x23, user ID (2 bytes), session token (32 bytes),
+                   message UID (4 bytes)
+          Response: 4-byte total length, 0x24, 1-byte read flag, 2-byte sender ID,
+                    2-byte content length, message content (UTF-8)
 
-        Request format:
-          - 4-byte total length
-          - 0x23
-          - user ID (2 bytes)
-          - session token (32 bytes, hex -> raw)
-          - message UID (4 bytes)
-
-        Response format:
-          - 4-byte total length
-          - 0x24
-          - has been read (1 byte; 0 or 1)
-          - sender ID (2 bytes)
-          - content length (2 bytes)
-          - message content (UTF-8, content length bytes)
+        In JSON mode:
+          Request: { "opcode": "get_message_info",
+                     "user_id": user_id,
+                     "session_token": session_token,
+                     "message_uid": message_uid }
+          Response: { "opcode": "get_message_info_response",
+                      "has_been_read": <bool>,
+                      "sender_id": <int>,
+                      "content": <str> }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-        
-        packet_body = bytearray()
-        packet_body.append(0x23)
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-        packet_body += message_uid.to_bytes(4, byteorder='big')
-        
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for get_message_info")
-        if response[4] != 0x24:
-            raise Exception(f"Unexpected opcode in get_message_info response: {response[4]:#04x}")
-
-        # Response body: byte 5: has_been_read (1 byte)
-        # bytes 6-7: sender ID (2 bytes)
-        # bytes 8-9: content length (2 bytes)
-        if len(response) < 10:
-            raise Exception("Incomplete response for message information")
-        has_been_read = bool(response[5])
-        sender_id = int.from_bytes(response[6:8], byteorder='big')
-        content_length = int.from_bytes(response[8:10], byteorder='big')
-        if len(response) < 10 + content_length:
-            raise Exception("Incomplete response: message content truncated")
-        message_content = response[10:10+content_length].decode('utf-8')
-        
-        return (has_been_read, sender_id, message_content)
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "get_message_info",
+                "user_id": user_id,
+                "session_token": session_token,
+                "message_uid": message_uid
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "get_message_info_response":
+                raise Exception("Unexpected opcode in get_message_info response")
+            return (
+                response_data.get("has_been_read", False),
+                response_data.get("sender_id", 0),
+                response_data.get("content", "")
+            )
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytearray()
+            packet_body.append(0x23)
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_body += message_uid.to_bytes(4, byteorder='big')
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for get_message_info")
+            if response[4] != 0x24:
+                raise Exception(f"Unexpected opcode in get_message_info response: {response[4]:#04x}")
+            if len(response) < 10:
+                raise Exception("Incomplete response for message information")
+            has_been_read = bool(response[5])
+            sender_id = int.from_bytes(response[6:8], byteorder='big')
+            content_length = int.from_bytes(response[8:10], byteorder='big')
+            if len(response) < 10 + content_length:
+                raise Exception("Incomplete response: message content truncated")
+            message_content = response[10:10+content_length].decode('utf-8')
+            return (has_been_read, sender_id, message_content)
 
     # 0x25: Get Username by ID
     def get_username_by_id(self, user_id: int) -> str:
         """
-        Opcode 0x25 (Get Username by ID Request) and expects a Response (0x26).
+        In binary mode:
+          Request: 4-byte length, 0x25, user ID (2 bytes)
+          Response: 4-byte total length, 0x26, 2-byte username length, username (UTF-8)
 
-        Request format:
-          - 4-byte total length
-          - 0x25
-          - user ID (2 bytes)
-
-        Response format:
-          - 4-byte total length
-          - 0x26
-          - username length (2 bytes)
-          - username (UTF-8)
+        In JSON mode:
+          Request: { "opcode": "get_username_by_id", "user_id": user_id }
+          Response: { "opcode": "get_username_by_id_response",
+                      "username": <str> }
         """
-        packet_body = bytearray()
-        packet_body.append(0x25)
-        packet_body += user_id.to_bytes(2, byteorder='big')
-
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for get_username_by_id")
-        if response[4] != 0x26:
-            raise Exception(f"Unexpected opcode in get_username_by_id response: {response[4]:#04x}")
-
-        if len(response) < 7:
-            raise Exception("Incomplete response: missing username length")
-        username_length = int.from_bytes(response[5:7], byteorder='big')
-        if len(response) < 7 + username_length:
-            raise Exception("Incomplete response: username data truncated")
-        username = response[7:7+username_length].decode('utf-8')
-        
-        return username
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "get_username_by_id",
+                "user_id": user_id
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "get_username_by_id_response":
+                raise Exception("Unexpected opcode in get_username_by_id response")
+            return response_data.get("username", "")
+        else:
+            packet_body = bytearray()
+            packet_body.append(0x25)
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for get_username_by_id")
+            if response[4] != 0x26:
+                raise Exception(f"Unexpected opcode in get_username_by_id response: {response[4]:#04x}")
+            if len(response) < 7:
+                raise Exception("Incomplete response: missing username length")
+            username_length = int.from_bytes(response[5:7], byteorder='big')
+            if len(response) < 7 + username_length:
+                raise Exception("Incomplete response: username data truncated")
+            return response[7:7+username_length].decode('utf-8')
 
     # 0x27: Mark Message as Read
     def mark_message_as_read(self, user_id: int, session_token: str, message_uid: int) -> None:
         """
-        Opcode 0x27 (Mark Message as Read Request) and expects a Response (0x28).
+        In binary mode:
+          Request: 4-byte length, 0x27, user ID (2 bytes), session token (32 bytes),
+                   message UID (4 bytes)
+          Response: 4-byte total length, 0x28
 
-        Request format:
-          - 4-byte total length
-          - 0x27
-          - user ID (2 bytes)
-          - session token (32 bytes, hex -> raw)
-          - message UID (4 bytes)
-
-        Response format:
-          - 4-byte total length
-          - 0x28
+        In JSON mode:
+          Request: { "opcode": "mark_message_as_read",
+                     "user_id": user_id,
+                     "session_token": session_token,
+                     "message_uid": message_uid }
+          Response: { "opcode": "mark_message_as_read_response" }
         """
-        token_bytes = bytes.fromhex(session_token)
-        if len(token_bytes) != 32:
-            raise ValueError("Decoded session token must be 32 bytes")
-        
-        packet_body = bytearray()
-        packet_body.append(0x27)
-        packet_body += user_id.to_bytes(2, byteorder='big')
-        packet_body += token_bytes
-        packet_body += message_uid.to_bytes(4, byteorder='big')
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "mark_message_as_read",
+                "user_id": user_id,
+                "session_token": session_token,
+                "message_uid": message_uid
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "mark_message_as_read_response":
+                raise Exception("Unexpected opcode in mark_message_as_read response")
+            return
+        else:
+            token_bytes = bytes.fromhex(session_token)
+            if len(token_bytes) != 32:
+                raise ValueError("Decoded session token must be 32 bytes")
+            packet_body = bytearray()
+            packet_body.append(0x27)
+            packet_body += user_id.to_bytes(2, byteorder='big')
+            packet_body += token_bytes
+            packet_body += message_uid.to_bytes(4, byteorder='big')
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for mark_message_as_read")
+            if response[4] != 0x28:
+                raise Exception(f"Unexpected opcode in mark_message_as_read response: {response[4]:#04x}")
 
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
-
-        response = self.send_request(packet)
-        if len(response) < 5:
-            raise Exception("Incomplete response for mark_message_as_read")
-        if response[4] != 0x28:
-            raise Exception(f"Unexpected opcode in mark_message_as_read response: {response[4]:#04x}")
-
-    # 0x29: Get username by userID
+    # 0x29: Get User by Username
     def get_user_by_username(self, username: str) -> tuple[bool, Optional[int]]:
         """
-        Opcode 0x29 (Get User by Username Request) and expects a Response (0x2A).
-    
-        Request format:
-        - 4-byte total length
-        - 1-byte opcode (0x29)
-        - 2-byte username length
-        - username (UTF-8)
-        
-        Response format:
-        - 4-byte total length
-        - 1-byte opcode (0x2A)
-        - 1-byte status code (0x00 if found, 0x01 if not found)
-        - if found: 2-byte user ID
-        
-        Returns:
-        Tuple (found: bool, user_id: int or None)
-        """
-        username_bytes = username.encode('utf-8')
-        username_length = len(username_bytes)
-    
-        packet_body = bytearray()
-        packet_body.append(0x29)
-        packet_body += username_length.to_bytes(2, byteorder='big')
-        packet_body += username_bytes
-        
-        packet_length = len(packet_body).to_bytes(4, byteorder='big')
-        packet = packet_length + packet_body
+        In binary mode:
+          Request: 4-byte length, 0x29, 2-byte username length, username (UTF-8)
+          Response: 4-byte total length, 0x2A, 1-byte status, and if found, 2-byte user ID
+          Returns: (found: bool, user_id: int or None)
 
-        response = self.send_request(packet)
-    
-        if len(response) < 5:
-            raise Exception("Incomplete response for get_user_by_username")
-        if response[4] != 0x2A:
-            raise Exception(f"Unexpected opcode in get_user_by_username response: {response[4]:#04x}")
-    
-        status = response[5]
-        if status == 0x00:
-            if len(response) < 8:
-                raise Exception("Incomplete response: missing user ID")
-            user_id = int.from_bytes(response[6:8], byteorder='big')
-            return True, user_id
+        In JSON mode:
+          Request: { "opcode": "get_user_by_username", "username": username }
+          Response: { "opcode": "get_user_by_username_response",
+                      "status": 0,    // found
+                      "user_id": <int> } 
+                   or { "opcode": "get_user_by_username_response", "status": 1 } (not found)
+        """
+        if self.use_json:
+            packet = self.build_json_packet({
+                "opcode": "get_user_by_username",
+                "username": username
+            })
+            response = self.send_request(packet)
+            json_str = response[4:].decode('utf-8')
+            response_data = json.loads(json_str)
+            if response_data.get("opcode") != "get_user_by_username_response":
+                raise Exception("Unexpected opcode in get_user_by_username response")
+            status = response_data.get("status", 1)
+            if status == 0:
+                return True, response_data.get("user_id")
+            else:
+                return False, None
         else:
-            return False, None
-        
+            username_bytes = username.encode('utf-8')
+            username_length = len(username_bytes)
+            packet_body = bytearray()
+            packet_body.append(0x29)
+            packet_body += username_length.to_bytes(2, byteorder='big')
+            packet_body += username_bytes
+            packet_length = len(packet_body).to_bytes(4, byteorder='big')
+            packet = packet_length + packet_body
+            response = self.send_request(packet)
+            if len(response) < 5:
+                raise Exception("Incomplete response for get_user_by_username")
+            if response[4] != 0x2A:
+                raise Exception(f"Unexpected opcode in get_user_by_username response: {response[4]:#04x}")
+            status = response[5]
+            if status == 0x00:
+                if len(response) < 8:
+                    raise Exception("Incomplete response: missing user ID")
+                user_id = int.from_bytes(response[6:8], byteorder='big')
+                return True, user_id
+            else:
+                return False, None
+            
     # OP CODE FUNCTIONS END
 
         
