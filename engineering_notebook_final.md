@@ -1,4 +1,37 @@
 
+# Data Testing
+
+These tests can be replicated by running `client/run_data_operations_test.py`. In this case, we create an instance of our Client class that bypasses the standard server-side API calls and manually defines our return type to be the amount of data within the packet. Within our set of sample queries, we found the following data measurements for our base operations: 
+
+**Measurements:**
+
+- **Custom Binary Protocol:**
+  - `search_username`: 12 bytes
+  - `create_account`: 44 bytes
+  - `log_into_account`: 44 bytes
+  - `log_out_of_account`: 39 bytes
+  - `list_accounts`: 42 bytes
+  - `display_conversation`: 41 bytes
+  - `send_message`: 48 bytes
+  - `read_messages`: 43 bytes
+  - `delete_message`: 43 bytes
+  - `delete_account`: 39 bytes
+
+- **JSON Protocol:**
+  - `search_username`: 54 bytes
+  - `create_account`: 140 bytes
+  - `log_into_account`: 142 bytes
+  - `log_out_of_account`: 135 bytes
+  - `list_accounts`: 147 bytes
+  - `display_conversation`: 157 bytes
+  - `send_message`: 168 bytes
+  - `read_messages`: 149 bytes
+  - `delete_message`: 152 bytes
+  - `delete_account`: 131 bytes
+
+In this case, the merit of using our custom wire protocol is clear, ranging from being **3x - 5x more compact** than our JSON system. One could argue that an advantage of the JSON system is its simplicity: our method of casting our input fields in and out of dictionaries is far easier than building out new functionality for the wire protocol, where we specify the size and type of each field so that we can pass in our raw data without padding. But the advantage of this system with respect to memory savings is clear, and would be especially advantageous if we were processing a lot of packets at once and / or challenging the bandwidth of our network connection. 
+
+# 
 
 ---
 
