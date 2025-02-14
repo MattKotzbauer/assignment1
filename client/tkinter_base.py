@@ -121,8 +121,47 @@ class ChatInterface:
     def check_messages(self):
         """Periodically check for new messages and update the display"""
         if self.current_user_id and self.current_token:  # Only check if logged in
+            print(f"\n=== Checking Messages for User {self.current_user_id} ===")
+            
+            # Get current selection to maintain it after refresh
+            current_selection = None
+            if hasattr(self, 'users_list'):
+                selected_indices = self.users_list.curselection()
+                if selected_indices:
+                    current_selection = self.users_list.get(selected_indices[0])
+                    if '[NEW]' in current_selection:
+                        current_selection = current_selection.replace('[NEW] ', '')
+                    if ' (UNREAD:' in current_selection:
+                        current_selection = current_selection.split(' (UNREAD:')[0]
+                    print(f"[DEBUG] Current selection: {current_selection}")
+            
+            # Get unread messages before refresh
+            old_unread = self.client.get_unread_messages(self.current_user_id, self.current_token)
+            old_count = len(old_unread) if old_unread else 0
+            print(f"[DEBUG] Unread messages before refresh: {old_count}")
+            
+            # Refresh lists and counts
+            print("[DEBUG] Refreshing user list and unread count...")
             self.refresh_user_list()
             self.update_unread_count()
+            
+            # Get unread messages after refresh
+            new_unread = self.client.get_unread_messages(self.current_user_id, self.current_token)
+            new_count = len(new_unread) if new_unread else 0
+            print(f"[DEBUG] Unread messages after refresh: {new_count}")
+            
+            # Restore selection if needed
+            if current_selection and hasattr(self, 'users_list'):
+                for i in range(self.users_list.size()):
+                    item = self.users_list.get(i)
+                    clean_item = item.replace('[NEW] ', '').split(' (UNREAD:')[0]
+                    if clean_item == current_selection:
+                        self.users_list.selection_set(i)
+                        self.users_list.see(i)
+                        print(f"[DEBUG] Restored selection to: {clean_item}")
+                        break
+            
+            print("=== Message Check Complete ===\n")
             # Check messages every 3 seconds
             self.root.after(3000, self.check_messages)
 
@@ -137,45 +176,40 @@ class ChatInterface:
             self.main_frame = ttk.Frame(self.root, padding="5")
             self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
             
-            # Add unread message counter at the top
-            self.unread_label = ttk.Label(
-                self.main_frame,
-                text="Loading messages...",
-                font=("Helvetica", 10),
-                foreground="#666666"
-            )
-            self.unread_label.grid(row=0, column=0, columnspan=2, pady=(0, 10), sticky="w")
-            self.update_unread_count()
-            
-            # Configure grid weight for resizing
+            # Configure grid weights
             self.root.columnconfigure(0, weight=1)
             self.root.rowconfigure(0, weight=1)
             self.main_frame.columnconfigure(1, weight=1)  # Message area column
-            self.main_frame.rowconfigure(1, weight=1)     # Message area row
+            self.main_frame.rowconfigure(2, weight=1)  # Message area row
             
-            # Create the three main sections
-            self.create_user_list()    # Left panel (row=1)
-            self.create_message_area() # Center panel (row=1)
-            self.create_input_area()   # Bottom panel (row=2)
+            # Add menu bar
+            menubar = tk.Menu(self.root)
+            self.root.config(menu=menubar)
             
-            # Create a frame for buttons
-            button_frame = ttk.Frame(self.main_frame)
-            button_frame.grid(row=3, column=0, pady=5)
+            # File menu
+            file_menu = tk.Menu(menubar, tearoff=0)
+            menubar.add_cascade(label="File", menu=file_menu)
+            file_menu.add_command(label="Delete Account", command=self.handle_delete_account)
+            file_menu.add_separator()
+            file_menu.add_command(label="Logout", command=self.handle_logout)
             
-            # Add logout button
-            ttk.Button(button_frame, text="Logout", command=self.handle_logout).grid(row=0, column=0, padx=2)
+            # Create unread messages counter at the top
+            self.unread_counter_frame = ttk.Frame(self.main_frame)
+            self.unread_counter_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+            self.unread_counter_label = ttk.Label(self.unread_counter_frame, text="Unread Messages: 0", font=("Helvetica", 10, "bold"))
+            self.unread_counter_label.pack()
             
-            # Add delete account button
-            ttk.Button(button_frame, text="Delete Account", command=self.handle_delete_account).grid(row=0, column=1, padx=2)
-    
-            # Refresh user list and messages
+            # Create the UI components
+            self.create_user_list()
+            self.create_message_area()
+            self.create_input_area()
+            
+            # Start message checking thread
+            self.message_check_thread = threading.Thread(target=self.check_messages, daemon=True)
+            self.message_check_thread.start()
+            
+            # Initial refresh of user list
             self.refresh_user_list()
-            self.display_messages()
-            self.update_unread_count()
-            self.root.update()
-            
-            # Start periodic message checking
-            self.check_messages()
             
             print("\n=== Main screen setup complete ===\n")
             
@@ -325,7 +359,7 @@ class ChatInterface:
         """Creates the left panel containing the list of online users"""
         # Frame for user list with fixed width
         users_frame = ttk.Frame(self.main_frame, width=200)
-        users_frame.grid(row=0, column=0, rowspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
+        users_frame.grid(row=1, column=0, rowspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
         users_frame.grid_propagate(False)  # Maintain fixed width
         
         # Label above user list
@@ -356,7 +390,7 @@ class ChatInterface:
         """Creates the center panel containing the message history"""
         # Frame for messages
         messages_frame = ttk.Frame(self.main_frame)
-        messages_frame.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
+        messages_frame.grid(row=1, column=1, rowspan=2, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Message controls frame
         controls_frame = ttk.Frame(messages_frame)
@@ -396,7 +430,7 @@ class ChatInterface:
         """Creates the bottom panel containing the message input and send button"""
         # Frame for input area
         input_frame = ttk.Frame(self.main_frame)
-        input_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=10)
+        input_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
         
         # Message entry field
         self.message_entry = ttk.Entry(input_frame, font=("Helvetica", 10))
@@ -477,8 +511,8 @@ class ChatInterface:
             # c[0]: message UID, c[1]: sender ID, c[2]: receiver ID
             current_unread_messages = self.client.get_unread_messages(self.current_user_id, self.current_token)
             for c in current_unread_messages:
-                curr_msg = get_message_info(self.current_user_id, self.current_token, c[0])
-                if curr_msg:
+                curr_msg = self.client.get_message_info(self.current_user_id, self.current_token, c[0])
+                if curr_msg[0]:
                     sender_username = self.get_username_by_id(c[1])
                     if sender_username:
                         unread_users.add(sender_username)
@@ -549,10 +583,49 @@ class ChatInterface:
             messagebox.showerror("Error", "Recipient does not exist")
             return
 
-        # Send message (TODO: error handling display in case of packet error??)
-        self.client.send_message(self.current_user_id, self.current_token, recipient_id, message)
-        self.message_entry.delete(0, tk.END)
-        self.display_messages()
+        # Send message
+        try:
+            print(f"\n=== Sending Message ===")
+            print(f"[DEBUG] From user: {self.current_user_id} to user: {recipient_id}")
+            print(f"[DEBUG] Message content: {message}")
+            
+            # Try to send message
+            success = self.client.send_message(self.current_user_id, self.current_token, recipient_id, message)
+            if not success:
+                print("[ERROR] Failed to send message - server returned error")
+                messagebox.showerror("Error", "Failed to send message. Please try again.")
+                return
+                
+            print("[DEBUG] Message sent successfully")
+            
+            # Clear message entry
+            self.message_entry.delete(0, tk.END)
+            
+            # Update UI
+            print("[DEBUG] Updating UI...")
+            self.display_messages(mark_as_read=True)  # Show sent message
+            self.refresh_user_list()
+            self.update_unread_count()
+            
+            # Schedule a delayed refresh to catch any updates
+            def delayed_refresh():
+                print("\n=== Running Delayed Refresh ===")
+                try:
+                    self.refresh_user_list()
+                    self.update_unread_count()
+                    self.display_messages(mark_as_read=True)
+                    print("=== Delayed Refresh Complete ===\n")
+                except Exception as e:
+                    print(f"[ERROR] Error in delayed refresh: {str(e)}")
+            
+            print("[DEBUG] Scheduling delayed refresh...")
+            self.root.after(1000, delayed_refresh)
+            
+            print("=== Message Send Complete ===\n")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to send message: {str(e)}")
+            messagebox.showerror("Error", "Failed to send message - connection error")
     
         # Send the message
         # if send_message(self.current_user_id, recipient_id, message):
@@ -563,78 +636,97 @@ class ChatInterface:
     
     def display_messages(self, mark_as_read=False):
         """Read and display messages"""
-        print("Refreshing messages...")
+        print("\n=== Refreshing Messages ===")
         self.messages_list.delete(0, tk.END)
         self.message_ids.clear()
         
         # Get selected user
         selection = self.users_list.curselection()
         if not selection:
+            print("[DEBUG] No user selected")
             self.messages_list.insert(tk.END, "Select a user to view messages")
             return
             
         selected_text = self.users_list.get(selection[0])
         if '━' in selected_text:  # Skip if separator selected
+            print("[DEBUG] Separator selected, skipping")
             return
             
-        # Extract username from display text (remove unread count if present)
+        # Extract username from display text
         selected_username = selected_text.split(' (UNREAD:')[0] if ' (UNREAD:' in selected_text else selected_text
-        # selected_user = get_user_by_username(selected_username)
+        print(f"[DEBUG] Selected username: {selected_username}")
+        
         selected_userID = self.get_userID_by_username(selected_username)
         if not selected_userID:
+            print(f"[ERROR] Could not get user ID for username: {selected_username}")
             return
         
-        # Get all messages between current user and selected user
-        conversation_key = tuple(sorted([self.current_user_id, selected_userID]))
-        # if conversation_key not in conversations.conversations:
-            # self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
-            # return
-        curr_conversation = self.client.display_conversation(self.current_user_id, self.current_token, selected_userID)
-        if not curr_conversation:
-            self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
+        print(f"[DEBUG] Getting conversation between user {self.current_user_id} and user {selected_userID}")
+        
+        try:
+            # Get conversation
+            curr_conversation = self.client.display_conversation(self.current_user_id, self.current_token, selected_userID)
+            
+            if not curr_conversation:
+                print("[DEBUG] No messages in conversation")
+                self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
+                return
+            
+            print(f"[DEBUG] Found {len(curr_conversation)} messages")
+            
+            # Separate unread and read messages
+            unread_messages = []
+            read_messages = []
+            
+            for conv_msg in curr_conversation:
+                try:
+                    msg_id, content, is_sender = conv_msg
+                    print(f"[DEBUG] Processing message {msg_id}: sender={is_sender}, content={content}")
+                    
+                    if is_sender:
+                        # Message sent by current user
+                        read_messages.append((conv_msg, f"You: {content}"))
+                        print(f"[DEBUG] Added sent message {msg_id} to read messages")
+                    else:
+                        # Message received from other user
+                        message_info = self.client.get_message_info(self.current_user_id, self.current_token, msg_id)
+                        print(f"[DEBUG] Message info for {msg_id}: {message_info}")
+                        
+                        if message_info and len(message_info) >= 1:
+                            has_been_read = message_info[0]
+                            if not has_been_read:
+                                unread_messages.append((conv_msg, f"{selected_username}: {content}"))
+                                print(f"[DEBUG] Added unread message {msg_id}")
+                                if mark_as_read:
+                                    print(f"[DEBUG] Marking message {msg_id} as read")
+                                    self.client.mark_message_as_read(self.current_user_id, self.current_token, msg_id)
+                                    self.client.read_messages(self.current_user_id, self.current_token, 1)
+                            else:
+                                read_messages.append((conv_msg, f"{selected_username}: {content}"))
+                                print(f"[DEBUG] Added read message {msg_id}")
+                        else:
+                            print(f"[WARN] No message info for {msg_id}, treating as read")
+                            read_messages.append((conv_msg, f"{selected_username}: {content}"))
+                except Exception as e:
+                    print(f"[ERROR] Error processing message {conv_msg}: {str(e)}")
+                    continue
+                    
+            print(f"[DEBUG] Found {len(unread_messages)} unread and {len(read_messages)} read messages")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to get conversation: {str(e)}")
+            self.messages_list.insert(tk.END, "Error loading messages")
             return
-        
-        
-        # Get messages for the current conversation
-        
-        # messages = conversations.conversations[conversation_key]
-        # messages = self.client.display_conversation() self.current_user_id, current.token, RECEIVER_ID
-        # messages.sort(key=lambda x: x.uid)  # Sort by message ID to maintain order
-        # curr_conversation.sort(key = lambda c: c[0]) # (idt we need to sort that right)
-
-        
-        # (for each element in curr_conversation: c[0] = UID: int, c[1] = content: str, c[2] = isSender: bool)
-        
-        # Separate unread and read messages
-        unread_messages = []
-        read_messages = []
-        
-        for conv_msg in curr_conversation:
-            if conv_msg[2]:
-                read_messages.append((conv_msg, f"You: {conv_msg[1]}"))
-            else:
-                # sender_username = get_username_by_id(msg.sender_id)
-                # message_info: [0]: has_been_read: bool, [1]: sender ID: int, [2]: content: str
-                message_info = self.client.get_message_info(self.current_user_id, self.current_token, conv_msg[0])
-                
-                # if not msg.has_been_read:
-                if not message_info[0]: 
-                    unread_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
-                    # Always mark messages as read when viewing them
-                    self.client.mark_message_as_read(self.current_user_id, self.current_token, conv_msg[0])
-                    self.client.read_messages(self.current_user_id, self.current_token, 1)
-                    # Refresh the user list to update unread counts
-                    self.refresh_user_list()
-                else:
-                    read_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
         
         # Display unread messages first if any
         if unread_messages:
+            print("[DEBUG] Displaying unread messages")
             self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
             for conv_msg, text in unread_messages:
                 self.messages_list.insert(tk.END, text)
                 self.message_ids.append(conv_msg[0])
                 self.messages_list.itemconfig(tk.END, fg='red')
+                print(f"[DEBUG] Displayed unread message: {text}")
             
             # Add separator
             self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
@@ -799,24 +891,28 @@ class ChatInterface:
 
     def update_unread_count(self):
         """Update the unread message counter"""
-        if not hasattr(self, 'unread_label') or not self.current_user_id:
+        if not hasattr(self, 'unread_counter_label') or not self.current_user_id:
+            print("[DEBUG] update_unread_count: Missing label or user ID")
             return
             
-        # user = user_base.users.get(self.current_user_id)
-        curr_username = self.get_username_by_id(self.current_user_id)
-        if not curr_username:
-            return
-            
-        # unread_count = len(user.unread_messages)
-        unread_message_data = self.client.get_unread_messages(self.current_user_id, self.current_token)
-        unread_count = len(unread_message_data)
-        if unread_count == 0:
-            self.unread_label.config(text="No unread messages", foreground="#666666")
-        else:
-            self.unread_label.config(
-                text=f"You have {unread_count} unread message{'s' if unread_count != 1 else ''}",
-                foreground="#007bff"
-            )
+        print(f"\n=== Updating Unread Count for User {self.current_user_id} ===")
+        # Get unread messages for current user
+        unread_messages = self.client.get_unread_messages(self.current_user_id, self.current_token)
+        print(f"[DEBUG] Raw unread messages: {unread_messages}")
+        
+        # Group messages by sender
+        sender_counts = {}
+        if unread_messages:
+            for msg in unread_messages:
+                sender_id = msg[1]  # msg[1] is sender_id
+                sender_name = self.get_username_by_id(sender_id)
+                sender_counts[sender_name] = sender_counts.get(sender_name, 0) + 1
+            print(f"[DEBUG] Unread messages per sender: {sender_counts}")
+        
+        unread_count = len(unread_messages) if unread_messages else 0
+        print(f"[DEBUG] Total unread count: {unread_count}")
+        self.unread_counter_label.config(text=f"Unread Messages: {unread_count}")
+        print("=== Unread Count Update Complete ===\n")
 
 if __name__ == "__main__":
     # Create and run the chat interface

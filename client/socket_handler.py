@@ -361,82 +361,127 @@ class Client:
             packet_length = len(packet_body).to_bytes(4, byteorder='big')
             packet = packet_length + packet_body
             response = self.send_request(packet)
-            if len(response) < 4 + 1 + 4:
-                raise Exception("Incomplete response")
-            opcode = response[4]
-            if opcode != 0x12:
-                raise Exception("Unexpected opcode in display_conversation")
-            message_count = int.from_bytes(response[5:9], byteorder='big')
-            messages = []
-            current_pos = 9
-            for _ in range(message_count):
-                if len(response) < current_pos + 4 + 2 + 1:
-                    raise Exception("Incomplete message data")
-                msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
-                current_pos += 4
-                msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
-                current_pos += 2
-                is_sender = response[current_pos] == 0x01
-                current_pos += 1
-                if len(response) < current_pos + msg_length:
-                    raise Exception("Incomplete message content")
-                msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
-                current_pos += msg_length
-                messages.append((msg_id, msg_content, is_sender))
-            return messages
+            try:
+                if len(response) < 4 + 1 + 4:
+                    print(f"[ERROR] Response too short: {len(response)} bytes")
+                    raise Exception("Incomplete response")
+                    
+                opcode = response[4]
+                if opcode != 0x12:
+                    print(f"[ERROR] Unexpected opcode: {opcode}")
+                    raise Exception("Unexpected opcode in display_conversation")
+                    
+                message_count = int.from_bytes(response[5:9], byteorder='big')
+                print(f"[DEBUG] Expecting {message_count} messages")
+                
+                messages = []
+                current_pos = 9
+                
+                for i in range(message_count):
+                    # Check if we have enough bytes for message header (4 + 2 + 1 = 7 bytes)
+                    if len(response) < current_pos + 7:
+                        print(f"[ERROR] Message {i+1} header incomplete: need {current_pos + 7} bytes, have {len(response)}")
+                        raise Exception("Incomplete message header")
+                        
+                    # Read message ID (4 bytes)
+                    msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
+                    current_pos += 4
+                    
+                    # Read message length (2 bytes)
+                    msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
+                    current_pos += 2
+                    
+                    # Read is_sender flag (1 byte)
+                    is_sender = response[current_pos] == 0x01
+                    current_pos += 1
+                    
+                    # Check if we have enough bytes for message content
+                    if len(response) < current_pos + msg_length:
+                        print(f"[ERROR] Message {i+1} content incomplete: need {msg_length} bytes at pos {current_pos}, have {len(response)-current_pos}")
+                        raise Exception("Incomplete message content")
+                        
+                    # Read message content
+                    msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
+                    current_pos += msg_length
+                    
+                    print(f"[DEBUG] Successfully read message {i+1}: id={msg_id}, length={msg_length}, is_sender={is_sender}")
+                    messages.append((msg_id, msg_content, is_sender))
+                    
+                print(f"[DEBUG] Successfully read all {len(messages)} messages")
+                return messages
+                
+            except Exception as e:
+                print(f"[ERROR] Failed to parse display_conversation response: {str(e)}")
+                print(f"[DEBUG] Response length: {len(response)} bytes")
+                print(f"[DEBUG] Response hex dump: {response.hex()}")
+                raise Exception("Failed to parse conversation data") from e
 
     # 0x13: Send Message
-    def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> None:
+    def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> bool:
         """
-        In binary mode:
-        Request: 4-byte length, 0x13, user ID (2 bytes), session token (32 bytes),
-               recipient ID (2 bytes), message length (2 bytes), message (UTF-8)
-        Response: 4-byte total length, 0x14
-              
-        In JSON mode:
-        Request: { "opcode": "send_message",
-                 "user_id": <user_id>,
-                 "session_token": <session_token>,
-                 "recipient_id": <recipient_id>,
-                 "message": <message> }
-        Response: { "opcode": "send_message_response" }
+        Send a message to another user.
+        
+        Args:
+            user_id (int): ID of the sender
+            session_token (str): Session token for authentication
+            recipient_id (int): ID of the recipient
+            message (str): Message content to send
+            
+        Returns:
+            bool: True if message was sent successfully, False otherwise
         """
-        if self.use_json:
-            packet = self.build_json_packet({
-                "opcode": "send_message",
-                "user_id": user_id,
-                "session_token": session_token,
-                "recipient_id": recipient_id,
-                "message": message
-            })
-            response = self.send_request(packet)
-            json_str = response[4:].decode('utf-8')
-            response_data = json.loads(json_str)
-            if response_data.get("opcode") != "send_message_response":
-                raise Exception("Unexpected opcode in send_message response")
-            return
-        else:
-            token_bytes = bytes.fromhex(session_token)
-            if len(token_bytes) != 32:
-                raise ValueError("Decoded session token must be 32 bytes")
-            
-            packet_body = bytes([0x13])
-            packet_body += user_id.to_bytes(2, byteorder='big')
-            packet_body += token_bytes
-            packet_body += recipient_id.to_bytes(2, byteorder='big')
-            
-            message_bytes = message.encode('utf-8')
-            packet_body += len(message_bytes).to_bytes(2, byteorder='big')
-            packet_body += message_bytes
-            
-            packet_length = len(packet_body).to_bytes(4, byteorder='big')
-            packet = packet_length + packet_body
-            
-            response = self.send_request(packet)
-            if len(response) < 5:
-                raise Exception("Incomplete response for send_message")
-            if response[4] != 0x14:
-                raise Exception(f"Unexpected opcode in send_message response: {response[4]:#04x}")
+        try:
+            if self.use_json:
+                packet = self.build_json_packet({
+                    "opcode": "send_message",
+                    "user_id": user_id,
+                    "session_token": session_token,
+                    "recipient_id": recipient_id,
+                    "message": message
+                })
+                response = self.send_request(packet)
+                json_str = response[4:].decode('utf-8')
+                response_data = json.loads(json_str)
+                if response_data.get("opcode") != "send_message_response":
+                    print(f"[ERROR] Unexpected opcode in send_message response: {response_data.get('opcode')}")
+                    return False
+                return True
+            else:
+                # Validate session token
+                token_bytes = bytes.fromhex(session_token)
+                if len(token_bytes) != 32:
+                    print(f"[ERROR] Invalid session token length: {len(token_bytes)} bytes")
+                    return False
+                
+                # Build request packet
+                packet_body = bytes([0x13])
+                packet_body += user_id.to_bytes(2, byteorder='big')
+                packet_body += token_bytes
+                packet_body += recipient_id.to_bytes(2, byteorder='big')
+                
+                # Add message content
+                message_bytes = message.encode('utf-8')
+                packet_body += len(message_bytes).to_bytes(2, byteorder='big')
+                packet_body += message_bytes
+                
+                # Send request
+                packet_length = len(packet_body).to_bytes(4, byteorder='big')
+                packet = packet_length + packet_body
+                response = self.send_request(packet)
+                
+                # Validate response
+                if len(response) < 5:
+                    print(f"[ERROR] Incomplete response: {len(response)} bytes")
+                    return False
+                if response[4] != 0x14:
+                    print(f"[ERROR] Unexpected opcode: {response[4]:#04x}")
+                    return False
+                    
+                return True
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to send message: {str(e)}")
+            return False
 
     # 0x15: Read Messages
     def read_messages(self, user_id: int, session_token: str, num_messages: int) -> None:
