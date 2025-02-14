@@ -382,6 +382,9 @@ class ChatInterface:
         self.selected_user_label = ttk.Label(users_frame, text="No user selected", font=("Helvetica", 9))
         self.selected_user_label.grid(row=2, column=0, pady=5)
         
+        # Add Mark All as Read button
+        ttk.Button(users_frame, text="Mark All as Read", command=self.mark_selected_as_read).grid(row=3, column=0, pady=5, padx=5, sticky=(tk.W, tk.E))
+        
         # Configure grid weights
         users_frame.columnconfigure(0, weight=1)
         users_frame.rowconfigure(1, weight=1)
@@ -396,9 +399,8 @@ class ChatInterface:
         controls_frame = ttk.Frame(messages_frame)
         controls_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
         
-        # Refresh and Delete buttons
-        ttk.Button(controls_frame, text="Mark All as Read", command=lambda: self.display_messages(mark_as_read=True)).grid(row=0, column=0, padx=5)
-        ttk.Button(controls_frame, text="Delete Selected", command=self.delete_selected_messages).grid(row=0, column=1, padx=5)
+        # Message action buttons
+        ttk.Button(controls_frame, text="Delete Selected", command=self.delete_selected_messages).grid(row=0, column=0, padx=5)
         
         # Label for messages
         ttk.Label(messages_frame, text="Messages", font=("Helvetica", 10, "bold")).grid(row=1, column=0, pady=5)
@@ -717,24 +719,30 @@ class ChatInterface:
             print(f"[ERROR] Failed to get conversation: {str(e)}")
             self.messages_list.insert(tk.END, "Error loading messages")
             return
-        
-        # Display unread messages first if any
-        if unread_messages:
-            print("[DEBUG] Displaying unread messages")
-            self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
-            for conv_msg, text in unread_messages:
-                self.messages_list.insert(tk.END, text)
-                self.message_ids.append(conv_msg[0])
-                self.messages_list.itemconfig(tk.END, fg='red')
-                print(f"[DEBUG] Displayed unread message: {text}")
+                # Only show messages section if we have messages
+        if unread_messages or read_messages:
+            # Display unread messages first if any exist
+            if unread_messages:
+                print("[DEBUG] Displaying unread messages")
+                self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
+                for conv_msg, text in unread_messages:
+                    self.messages_list.insert(tk.END, text)
+                    self.message_ids.append(conv_msg[0])
+                    self.messages_list.itemconfig(tk.END, fg='red')
+                    print(f"[DEBUG] Displayed unread message: {text}")
+                
+                # Only add separator if there are read messages to follow
+                if read_messages:
+                    self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
+                    self.messages_list.insert(tk.END, "━━━ Read Messages ━━━")
             
-            # Add separator
-            self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
-        
-        # Display read messages
-        for conv_msg, text in read_messages:
-            self.messages_list.insert(tk.END, text)
-            self.message_ids.append(conv_msg[0])
+            # Display read messages
+            if read_messages:
+                for conv_msg, text in read_messages:
+                    self.messages_list.insert(tk.END, text)
+                    self.message_ids.append(conv_msg[0])
+                    self.messages_list.itemconfig(tk.END, fg='white')  # Ensure read messages are white
+                print(f"[DEBUG] Displayed {len(read_messages)} read messages")
         
         # Scroll to show unread messages if any, otherwise scroll to bottom
         if unread_messages and not mark_as_read:
@@ -783,37 +791,77 @@ class ChatInterface:
             msg = f"Successfully deleted {deleted_count} message{'s' if deleted_count > 1 else ''}."
             messagebox.showinfo("Success", msg)
     
+    def mark_selected_as_read(self):
+        """Mark all messages from the selected user as read"""
+        # Get selected user
+        user_selection = self.users_list.curselection()
+        if not user_selection:
+            messagebox.showerror("Error", "Please select a user to mark messages as read")
+            return
+            
+        selected_text = self.users_list.get(user_selection[0])
+        if '━' in selected_text:  # Skip if separator selected
+            messagebox.showerror("Error", "Please select a valid user")
+            return
+            
+        # Extract username from the selected text (handle both normal and unread message formats)
+        if '(UNREAD:' in selected_text:
+            username = selected_text.split(' (UNREAD:')[0].replace('[NEW] ', '')
+        else:
+            username = selected_text
+            
+        try:
+            marked_count = 0
+            print(f"\n=== Marking All Messages from {username} as Read ===")
+            
+            # Get all unread messages
+            unread_messages = self.client.get_unread_messages(self.current_user_id, self.current_token)
+            if not unread_messages:
+                messagebox.showinfo("Info", "No unread messages from this user")
+                return
+                
+            # Get the sender's user ID
+            sender_id = self.get_userID_by_username(username)
+            if not sender_id:
+                messagebox.showerror("Error", "Could not find the selected user")
+                return
+                
+            # Mark all unread messages from this sender as read
+            for msg in unread_messages:
+                # msg[0] is message_uid, msg[1] is sender_id
+                if msg[1] == sender_id:
+                    print(f"[DEBUG] Marking message {msg[0]} as read")
+                    self.client.mark_message_as_read(self.current_user_id, self.current_token, msg[0])
+                    marked_count += 1
+                    print(f"[DEBUG] Successfully marked message {msg[0]} as read")
+            
+            print(f"[DEBUG] Marked {marked_count} messages as read")
+            
+            if marked_count > 0:
+                # Update the unread count and refresh the display
+                self.refresh_user_list()
+                self.update_unread_count()
+                self.display_messages()
+                
+                # Show success message
+                messagebox.showinfo("Success", f"Marked {marked_count} messages from {username} as read")
+            
+            print("=== Mark as Read Complete ===\n")
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to mark messages as read: {str(e)}")
+            messagebox.showerror("Error", "Failed to mark messages as read")
+            
     def on_message_select(self, event):
-        """Handle message selection and mark messages as read"""
+        """Handle message selection"""
         selection = self.messages_list.curselection()
         if not selection:
             return
-            
-        # Get the selected message indices
+        # Update UI for selected messages
         for index in selection:
-            # Skip if it's a separator
             item_text = self.messages_list.get(index)
-            if '━' in item_text:
-                continue
-                
-            # Get the message ID and mark it as read
-            if index < len(self.message_ids):
-                message_id = self.message_ids[index]
-                # TODO: FIX
-                # message = message_base.messages.get(message_id)
-
-                # msg_info: [0]: has_been_read, [1]: sender ID, [2]: content
-                msg_info = self.client.get_message_info(self.current_user_id, self.current_token, message_id)
-                
-                if msg_info and not msg_info[0] and msg_info[2] != self.current_user_id:
-                    # message.has_been_read = True
-                    self.client.mark_message_as_read(self.current_user_id, self.current_token, msg_info[0])
-                    # mark_messages_as_read(self.current_user_id, 1)
-                    self.client.read_messages(self.current_user_id)
-                    # Update the message display
-                    self.messages_list.itemconfig(index, fg='black')
-                    self.update_unread_count()
-                    self.refresh_user_list()
+            if '━' not in item_text:  # Skip separators
+                self.messages_list.itemconfig(index, fg='white')
     
     def on_user_select(self, event):
         """Handle user selection from the list"""
