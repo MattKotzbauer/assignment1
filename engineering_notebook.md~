@@ -27,9 +27,6 @@ JSON op 'delete_message' sent 152 bytes
 JSON op 'delete_account' sent 131 bytes
 
 
-
-
-
 Thinking about the shape of our packet is something I want to do carefully since I've never written a wire protocol from the ground-up before. Thinking on first principles, I would think our protocol should adhere to the following axioms:
 - Specifying length in the beginning to simplify the handling of multiple packets
 - Specifying message type as well in the beginning, and having the remaining content of the message and its interpretation be based on that
