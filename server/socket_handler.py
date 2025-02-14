@@ -828,25 +828,7 @@ class Server:
             2-byte user id,
             32-byte session token,
             2-byte conversant user id
-        """
-        if len(packet_content) < 4 + 1 + 2 + 32 + 2:
-            print("Display conversation request too short.")
-            return b""
-
-        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
-        session_token = packet_content[7:7+32]
-        conversant_id = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
-
-        stored_token = driver.session_tokens.tokens.get(user_id)
-        if stored_token is None or bytes.fromhex(stored_token) != session_token:
-            print("Invalid session token for display conversation.")
-            messages = []
-        else:
-            # Conversations are stored using a sorted tuple as key
-            key = tuple(sorted([user_id, conversant_id]))
-            messages = driver.conversations.conversations.get(key, [])
             
-        """
         Response format:
             4-byte total length,
             0x12,
@@ -856,25 +838,52 @@ class Server:
                 2-byte message length
                 1-byte flag (0x00 if user is recipient, 0x01 if user is sender)
                 message content (UTF-8 string)
-        """   
-        response_body = bytes([0x12])
-        message_count = len(messages)
-        response_body += message_count.to_bytes(4, byteorder='big')
+        """
+        if len(packet_content) < 4 + 1 + 2 + 32 + 2:
+            print("[ERROR] Display conversation request too short.")
+            return b""
+
+        user_id = int.from_bytes(packet_content[5:7], byteorder='big')
+        session_token = packet_content[7:7+32]
+        conversant_id = int.from_bytes(packet_content[7+32:7+32+2], byteorder='big')
         
+        print(f"[DEBUG] Displaying conversation between user {user_id} and {conversant_id}")
+
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or bytes.fromhex(stored_token) != session_token:
+            print(f"[ERROR] Invalid session token for user {user_id}")
+            messages = []
+        else:
+            # Get messages for this conversation
+            key = tuple(sorted([user_id, conversant_id]))
+            messages = driver.conversations.conversations.get(key, [])
+            print(f"[DEBUG] Found {len(messages)} messages")
+            
+        # Build response
+        response_body = bytes([0x12])  # opcode
+        response_body += len(messages).to_bytes(4, byteorder='big')  # message count
+        
+        # Add each message to response
         for msg in messages:
+            # Convert message data to bytes
             uid_bytes = msg.uid.to_bytes(4, byteorder='big')
             content_bytes = msg.contents.encode('utf-8')
             content_length_bytes = len(content_bytes).to_bytes(2, byteorder='big')
-            
-            # Determine flag: 0x01 if requesting user is sender, else 0x00
             flag = 0x01 if msg.sender_id == user_id else 0x00
-            if flag == 0x01 or msg.has_been_read: 
-                response_body += uid_bytes + content_length_bytes + bytes([flag]) + content_bytes
+            
+            # Add message to response
+            response_body += uid_bytes
+            response_body += content_length_bytes
+            response_body += bytes([flag])
+            response_body += content_bytes
+            
+            print(f"[DEBUG] Added message {msg.uid}: {len(content_bytes)} bytes, is_sender={flag==0x01}")
 
-
+        # Add length prefix and return
         response_length = len(response_body).to_bytes(4, byteorder='big')
         full_response = response_length + response_body
         
+        print(f"[DEBUG] Response size: {len(full_response)} bytes")
         return full_response
 
     # 0x13: Send Message
