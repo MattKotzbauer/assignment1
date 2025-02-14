@@ -382,9 +382,6 @@ class ChatInterface:
         self.selected_user_label = ttk.Label(users_frame, text="No user selected", font=("Helvetica", 9))
         self.selected_user_label.grid(row=2, column=0, pady=5)
         
-        # Add Mark All as Read button
-        ttk.Button(users_frame, text="Mark All as Read", command=self.mark_selected_as_read).grid(row=3, column=0, pady=5, padx=5, sticky=(tk.W, tk.E))
-        
         # Configure grid weights
         users_frame.columnconfigure(0, weight=1)
         users_frame.rowconfigure(1, weight=1)
@@ -401,6 +398,7 @@ class ChatInterface:
         
         # Message action buttons
         ttk.Button(controls_frame, text="Delete Selected", command=self.delete_selected_messages).grid(row=0, column=0, padx=5)
+        ttk.Button(controls_frame, text="Mark All as Read", command=self.mark_selected_as_read).grid(row=0, column=1, padx=5)
         
         # Label for messages
         ttk.Label(messages_frame, text="Messages", font=("Helvetica", 10, "bold")).grid(row=1, column=0, pady=5)
