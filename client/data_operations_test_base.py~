@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+import json
+from client import Client
+
+class TestClient(Client):
+    """
+    A subclass of Client that overrides send_request to record the
+    number of bytes that would be sent and then returns a dummy response.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # A list to store the lengths of packets sent (in bytes)
+        self.sent_data_lengths = []
+
+    def send_request(self, request_content: bytes) -> bytes:
+        # Record the length of the packet that would be sent.
+        self.sent_data_lengths.append(len(request_content))
+
+        # Now, generate a dummy response based on the protocol mode.
+        if self.use_json:
+            # In JSON mode the packet is:
+            #   [4-byte length][JSON string]
+            req_length = int.from_bytes(request_content[:4], byteorder='big')
+            req_json = json.loads(request_content[4:].decode('utf-8'))
+            opcode = req_json.get("opcode")
+            # Build a minimal dummy response for each opcode.
+            if opcode == "search_username":
+                resp = {"opcode": "search_username_response", "available": True}
+            elif opcode == "create_account":
+                resp = {"opcode": "create_account_response", "session_token": "a" * 64}
+            elif opcode == "log_into_account":
+                resp = {"opcode": "log_into_account_response", "success": True,
+                        "session_token": "a" * 64, "unread_count": 0}
+            elif opcode == "list_accounts":
+                resp = {"opcode": "list_accounts_response", "accounts": ["bob", "charlie"]}
+            elif opcode == "display_conversation":
+                resp = {"opcode": "display_conversation_response", "messages": []}
+            elif opcode == "send_message":
+                resp = {"opcode": "send_message_response"}
+            elif opcode == "read_messages":
+                resp = {"opcode": "read_messages_response"}
+            elif opcode == "delete_message":
+                resp = {"opcode": "delete_message_response"}
+            elif opcode == "delete_account":
+                resp = {"opcode": "delete_account_response"}
+            elif opcode == "get_unread_messages":
+                resp = {"opcode": "get_unread_messages_response", "messages": []}
+            elif opcode == "get_message_info":
+                resp = {"opcode": "get_message_info_response",
+                        "has_been_read": True, "sender_id": 1, "content": "dummy"}
+            elif opcode == "log_out_of_account":
+                resp = {"opcode": "log_out_of_account_response"}
+            elif opcode == "mark_message_as_read":
+                resp = {"opcode": "mark_message_as_read_response"}
+            elif opcode == "get_user_by_username":
+                # Return status 0 (found) and a dummy user id.
+                resp = {"opcode": "get_user_by_username_response", "status": 0, "user_id": 123}
+            else:
+                resp = {"opcode": opcode + "_response"}
+            resp_bytes = json.dumps(resp).encode('utf-8')
+            # Prepend a 4-byte header representing the length
+            return len(resp_bytes).to_bytes(4, byteorder='big') + resp_bytes
+
+        else:
+            # Binary mode: the opcode is stored at byte 4
+            opcode = request_content[4]
+            if opcode == 0x01:
+                # search_username: response: [4-byte length][0x02][status byte]
+                body = bytes([0x02, 0x00])  # 0x00 means available
+            elif opcode == 0x03:
+                # create_account: response: [4-byte length][0x04][32-byte token]
+                body = bytes([0x04]) + (b'a' * 32)
+            elif opcode == 0x05:
+                # log_into_account: response: [4-byte length][0x06][status][32-byte token][4-byte unread count]
+                body = bytes([0x06, 0x00]) + (b'a' * 32) + (0).to_bytes(4, byteorder='big')
+            elif opcode == 0x09:
+                # list_accounts: response: [4-byte length][0x10][2-byte count] + account entries
+                accounts = [b"bob", b"charlie"]
+                body = bytes([0x10]) + len(accounts).to_bytes(2, byteorder='big')
+                for account in accounts:
+                    body += len(account).to_bytes(2, byteorder='big') + account
+            elif opcode == 0x11:
+                # display_conversation: response: [4-byte length][0x12][4-byte msg count]
+                body = bytes([0x12]) + (0).to_bytes(4, byteorder='big')
+            elif opcode == 0x13:
+                # send_message: response: [4-byte length][0x14]
+                body = bytes([0x14])
+            elif opcode == 0x15:
+                # read_messages: response: [4-byte length][0x16]
+                body = bytes([0x16])
+            elif opcode == 0x17:
+                # delete_message: response: [4-byte length][0x18]
+                body = bytes([0x18])
+            elif opcode == 0x19:
+                # delete_account: response: [4-byte length][0x20]
+                body = bytes([0x20])
+            elif opcode == 0x21:
+                # get_unread_messages: response: [4-byte length][0x22][4-byte count]
+                body = bytes([0x22]) + (0).to_bytes(4, byteorder='big')
+            elif opcode == 0x23:
+                # get_message_info: response: [4-byte length][0x24][has_read][sender_id][2-byte content length][content]
+                msg = b"dummy"
+                body = bytes([0x24, 0x01]) + (1).to_bytes(2, byteorder='big') + len(msg).to_bytes(2, byteorder='big') + msg
+            elif opcode == 0x25:
+                # get_username_by_id: response: [4-byte length][0x26][2-byte length][username]
+                username = b"dummy"
+                body = bytes([0x26]) + len(username).to_bytes(2, byteorder='big') + username
+            elif opcode == 0x27:
+                # mark_message_as_read: response: [4-byte length][0x28]
+                body = bytes([0x28])
+            elif opcode == 0x29:
+                # get_user_by_username: response: [4-byte length][0x2A][status][if found then 2-byte user id]
+                # Here we assume a successful lookup.
+                body = bytes([0x2A, 0x00]) + (123).to_bytes(2, byteorder='big')
+            elif opcode == 0x07:
+                # log out of account: response: [4-byte length][0x08]
+                body = bytes([0x08])
+            else:
+                # Default dummy response: just echo opcode+1
+                body = bytes([opcode + 1])
+            return len(body).to_bytes(4, byteorder='big') + body
+
+
+def test_data_lengths():
+    # Define a set of operations with dummy parameters.
+    operations = [
+        ("search_username", {"username": "alice"}),
+        ("create_account", {"username": "alice", "password": "secret"}),
+        ("log_into_account", {"username": "alice", "password": "secret"}),
+        ("list_accounts", {"user_id": 1, "session_token": "a" * 64, "wildcard": "a"}),
+        ("display_conversation", {"user_id": 1, "session_token": "a" * 64, "conversant_id": 2}),
+        ("send_message", {"user_id": 1, "session_token": "a" * 64, "recipient_id": 2, "message": "Hello"}),
+        ("read_messages", {"user_id": 1, "session_token": "a" * 64, "num_messages": 5}),
+        ("delete_message", {"user_id": 1, "message_uid": 1234, "session_token": "a" * 64}),
+        ("delete_account", {"user_id": 1, "session_token": "a" * 64}),
+        ("get_unread_messages", {"user_id": 1, "session_token": "a" * 64}),
+        ("get_message_info", {"user_id": 1, "session_token": "a" * 64, "message_uid": 1234}),
+        ("get_username_by_id", {"user_id": 1}),
+        ("mark_message_as_read", {"user_id": 1, "session_token": "a" * 64, "message_uid": 1234}),
+        ("get_user_by_username", {"username": "alice"}),
+        ("log_out_of_account", {"user_id": 1, "session_token": "a" * 64}),
+    ]
+
+    print("=== Testing Binary (Custom Wire Protocol) Operations ===")
+    binary_client = TestClient("localhost", 0, use_json=False)
+    for op, params in operations:
+        # Reset the recorded packet lengths before each operation.
+        binary_client.sent_data_lengths = []
+        try:
+            if op == "search_username":
+                binary_client.search_username(params["username"])
+            elif op == "create_account":
+                binary_client.create_account(params["username"], params["password"])
+            elif op == "log_into_account":
+                binary_client.log_into_account(params["username"], params["password"])
+            elif op == "list_accounts":
+                binary_client.list_accounts(params["user_id"], params["session_token"], params["wildcard"])
+            elif op == "display_conversation":
+                binary_client.display_conversation(params["user_id"], params["session_token"], params["conversant_id"])
+            elif op == "send_message":
+                binary_client.send_message(params["user_id"], params["session_token"], params["recipient_id"], params["message"])
+            elif op == "read_messages":
+                binary_client.read_messages(params["user_id"], params["session_token"], params["num_messages"])
+            elif op == "delete_message":
+                binary_client.delete_message(params["user_id"], params["message_uid"], params["session_token"])
+            elif op == "delete_account":
+                binary_client.delete_account(params["user_id"], params["session_token"])
+            elif op == "get_unread_messages":
+                binary_client.get_unread_messages(params["user_id"], params["session_token"])
+            elif op == "get_message_info":
+                binary_client.get_message_info(params["user_id"], params["session_token"], params["message_uid"])
+            elif op == "get_username_by_id":
+                binary_client.get_username_by_id(params["user_id"])
+            elif op == "mark_message_as_read":
+                binary_client.mark_message_as_read(params["user_id"], params["session_token"], params["message_uid"])
+            elif op == "get_user_by_username":
+                binary_client.get_user_by_username(params["username"])
+            elif op == "log_out_of_account":
+                binary_client.log_out_of_account(params["user_id"], params["session_token"])
+            else:
+                print("Unknown operation:", op)
+            # Print out the length of the packet sent.
+            if binary_client.sent_data_lengths:
+                print(f"Binary op '{op}': sent {binary_client.sent_data_lengths[-1]} bytes")
+            else:
+                print(f"Binary op '{op}': no data sent")
+        except Exception as e:
+            print(f"Binary op '{op}' failed: {e}")
+
+    print("\n=== Testing JSON Operations ===")
+    json_client = TestClient("localhost", 0, use_json=True)
+    for op, params in operations:
+        json_client.sent_data_lengths = []
+        try:
+            if op == "search_username":
+                json_client.search_username(params["username"])
+            elif op == "create_account":
+                json_client.create_account(params["username"], params["password"])
+            elif op == "log_into_account":
+                json_client.log_into_account(params["username"], params["password"])
+            elif op == "list_accounts":
+                json_client.list_accounts(params["user_id"], params["session_token"], params["wildcard"])
+            elif op == "display_conversation":
+                json_client.display_conversation(params["user_id"], params["session_token"], params["conversant_id"])
+            elif op == "send_message":
+                json_client.send_message(params["user_id"], params["session_token"], params["recipient_id"], params["message"])
+            elif op == "read_messages":
+                json_client.read_messages(params["user_id"], params["session_token"], params["num_messages"])
+            elif op == "delete_message":
+                json_client.delete_message(params["user_id"], params["message_uid"], params["session_token"])
+            elif op == "delete_account":
+                json_client.delete_account(params["user_id"], params["session_token"])
+            elif op == "get_unread_messages":
+                json_client.get_unread_messages(params["user_id"], params["session_token"])
+            elif op == "get_message_info":
+                json_client.get_message_info(params["user_id"], params["session_token"], params["message_uid"])
+            elif op == "mark_message_as_read":
+                json_client.mark_message_as_read(params["user_id"], params["session_token"], params["message_uid"])
+            elif op == "get_user_by_username":
+                json_client.get_user_by_username(params["username"])
+            elif op == "log_out_of_account":
+                json_client.log_out_of_account(params["user_id"], params["session_token"])
+            else:
+                print("Unknown operation:", op)
+            if json_client.sent_data_lengths:
+                print(f"JSON op '{op}': sent {json_client.sent_data_lengths[-1]} bytes")
+            else:
+                print(f"JSON op '{op}': no data sent")
+        except Exception as e:
+            print(f"JSON op '{op}' failed: {e}")
+
+if __name__ == "__main__":
+    test_data_lengths()

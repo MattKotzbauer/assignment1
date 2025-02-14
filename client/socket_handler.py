@@ -1,5 +1,5 @@
 
-# client.py
+# client/socket_handler.py
 import socket
 from typing import Optional
 import time
