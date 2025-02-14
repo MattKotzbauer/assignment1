@@ -83,14 +83,13 @@ def send_message(sender_id: int, recipient_id: int, message_content: str):
         message_id = message_base._next_message_id
         message_base._next_message_id += 1
 
-    is_recipient_online = recipient_id in session_tokens.tokens
-
+    # Create new message - always unread initially
     new_message = Message(
         uid=message_id,
         contents=message_content,
         sender_id=sender_id,
         receiver_id=recipient_id,
-        has_been_read=is_recipient_online  # Message is considered read if recipient is online
+        has_been_read=False  # Messages start as unread regardless of recipient's online status
     )
 
     message_base.messages[message_id] = new_message
@@ -100,9 +99,8 @@ def send_message(sender_id: int, recipient_id: int, message_content: str):
     user_base.users[sender_id].update_recent_conversant(recipient_id)
     user_base.users[recipient_id].update_recent_conversant(sender_id)
 
-    if not is_recipient_online:
-        user_base.users[recipient_id].add_unread_message(message_id)
-
+    # Always add to unread messages for recipient
+    user_base.users[recipient_id].add_unread_message(message_id)
     return True
 
 # FUNCTION 5
