@@ -1,4 +1,4 @@
-# server.py
+# server/socket_handler.py
 import socket
 import selectors
 import types
@@ -140,7 +140,17 @@ class Server:
                     elif opcode == "delete_message":
                         response_data = self.delete_message_json(request)
                     elif opcode == "delete_account":
-                        response_data = self.delete_account_json(request)   
+                        response_data = self.delete_account_json(request)
+                    elif opcode == "get_unread_messages":
+                        response_data = self.get_unread_messages_json(request)
+                    elif opcode == "get_message_info":
+                        response_data = self.get_message_info_json(request)
+                    elif opcode == "get_username_by_id":
+                        response_data = self.get_username_by_id_json(request)
+                    elif opcode == "mark_message_as_read":
+                        response_data = self.mark_message_as_read_json(request)
+                    elif opcode == "get_user_by_username":
+                        response_data = self.get_user_by_username_json(request)
                     # elif opcode == "foo":
                         # pass 
                         
@@ -452,7 +462,198 @@ class Server:
             
         return { "opcode": "delete_account_response" }
     
+    # 0x21: Get Unread Messages (json)
+    def get_unread_messages_json(self, request: dict) -> dict:
+        """
+        Request:
+            {
+                "opcode": "get_unread_messages",
+                "user_id": <int>,
+                "session_token": <str>
+            }
+        Response:
+            {
+                "opcode": "get_unread_messages_response",
+                "unread_messages": [
+                    {
+                        "message_uid": <int>,
+                        "sender_id": <int>,
+                        "receiver_id": <int>
+                    },
+                    ...
+                ]
+            }
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for get_unread_messages (user {user_id}).")
+            unread_messages = []
+        else:
+            user = driver.user_base.users.get(user_id)
+            if not user:
+                print(f"[JSON] User {user_id} not found for get_unread_messages.")
+                unread_messages = []
+            else:
+                unread_messages = []
+                # Copy the list of unread message UIDs without modifying it.
+                for msg_uid in list(user.unread_messages):
+                    msg = driver.message_base.messages.get(msg_uid)
+                    if msg:
+                        unread_messages.append({
+                            "message_uid": msg.uid,
+                            "sender_id": msg.sender_id,
+                            "receiver_id": msg.receiver_id
+                        })
+        return {
+            "opcode": "get_unread_messages_response",
+            "unread_messages": unread_messages
+        }
 
+    # 0x23: Get Message Information (json)
+    def get_message_info_json(self, request: dict) -> dict:
+        """
+        Request:
+            {
+                "opcode": "get_message_info",
+                "user_id": <int>,
+                "session_token": <str>,
+                "message_uid": <int>
+            }
+        Response:
+            {
+                "opcode": "get_message_info_response",
+                "has_been_read": <bool>,
+                "sender_id": <int>,
+                "content": <str>
+            }
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        message_uid = request.get("message_uid")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for get_message_info (user {user_id}).")
+            return {
+                "opcode": "get_message_info_response",
+                "has_been_read": False,
+                "sender_id": 0,
+                "content": ""
+            }
+        msg = driver.message_base.messages.get(message_uid)
+        if not msg:
+            print(f"[JSON] Message {message_uid} not found in get_message_info.")
+            return {
+                "opcode": "get_message_info_response",
+                "has_been_read": False,
+                "sender_id": 0,
+                "content": ""
+            }
+        # Optionally, you could verify that the requesting user is authorized (sender or receiver)
+        if user_id not in (msg.sender_id, msg.receiver_id):
+            print(f"[JSON] User {user_id} not authorized for message {message_uid} in get_message_info.")
+            return {
+                "opcode": "get_message_info_response",
+                "has_been_read": False,
+                "sender_id": 0,
+                "content": ""
+            }
+        return {
+            "opcode": "get_message_info_response",
+            "has_been_read": msg.has_been_read,
+            "sender_id": msg.sender_id,
+            "content": msg.contents
+        }
+
+    # 0x25: Get Username by ID (json)
+    def get_username_by_id_json(self, request: dict) -> dict:
+        """
+        Request:
+            {
+                "opcode": "get_username_by_id",
+                "user_id": <int>
+            }
+        Response:
+            {
+                "opcode": "get_username_by_id_response",
+                "username": <str>
+            }
+        """
+        user_id = request.get("user_id")
+        user = driver.user_base.users.get(user_id)
+        username = user.username if user else ""
+        if not user:
+            print(f"[JSON] User {user_id} not found in get_username_by_id.")
+        return {
+            "opcode": "get_username_by_id_response",
+            "username": username
+        }
+
+    # 0x27: Mark Message as Read (json)
+    def mark_message_as_read_json(self, request: dict) -> dict:
+        """
+        Request:
+            {
+                "opcode": "mark_message_as_read",
+                "user_id": <int>,
+                "session_token": <str>,
+                "message_uid": <int>
+            }
+        Response:
+            {
+                "opcode": "mark_message_as_read_response"
+            }
+        """
+        user_id = request.get("user_id")
+        session_token = request.get("session_token", "")
+        message_uid = request.get("message_uid")
+        stored_token = driver.session_tokens.tokens.get(user_id)
+        if stored_token is None or stored_token != session_token:
+            print(f"[JSON] Invalid session token for mark_message_as_read (user {user_id}).")
+        else:
+            user = driver.user_base.users.get(user_id)
+            if user:
+                user.mark_message_read(message_uid)
+            msg = driver.message_base.messages.get(message_uid)
+            if msg:
+                msg.has_been_read = True
+        return {
+            "opcode": "mark_message_as_read_response"
+        }
+
+    # 0x29: Get User by Username (json)
+    def get_user_by_username_json(self, request: dict) -> dict:
+        """
+        Request:
+            {
+                "opcode": "get_user_by_username",
+                "username": <str>
+            }
+        Response:
+            {
+                "opcode": "get_user_by_username_response",
+                "status": <int>,  # 0 indicates success (found), 1 indicates not found
+                "user_id": <int>  # included only if found
+            }
+        """
+        username = request.get("username", "")
+        print(f"[JSON] Request for username: {username}")
+        user = driver.user_trie.trie.get(username)
+        if user:
+            print(f"[JSON] Found user '{username}' with ID: {user.userID}")
+            return {
+                "opcode": "get_user_by_username_response",
+                "status": 0,  # found
+                "user_id": user.userID
+            }
+        else:
+            print(f"[JSON] Username '{username}' not found.")
+            return {
+                "opcode": "get_user_by_username_response",
+                "status": 1  # not found
+            }
+    
     # CUSTOM PROTOCOL JSON-BASED FUNCTIONS END
     
     # -----------------------------------------------------

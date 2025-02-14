@@ -1,6 +1,30 @@
 
 
-Design Notebook:
+Engineering Notebook:
+
+=== Measurements for Custom Binary Protocol ===
+Binary op 'search_username' sent 12 bytes
+Binary op 'create_account' sent 44 bytes
+Binary op 'log_into_account' sent 44 bytes
+Binary op 'log_out_of_account' sent 39 bytes
+Binary op 'list_accounts' sent 42 bytes
+Binary op 'display_conversation' sent 41 bytes
+Binary op 'send_message' sent 48 bytes
+Binary op 'read_messages' sent 43 bytes
+Binary op 'delete_message' sent 43 bytes
+Binary op 'delete_account' sent 39 bytes
+
+=== Measurements for JSON Protocol ===
+JSON op 'search_username' sent 54 bytes
+JSON op 'create_account' sent 140 bytes
+JSON op 'log_into_account' sent 142 bytes
+JSON op 'log_out_of_account' sent 135 bytes
+JSON op 'list_accounts' sent 147 bytes
+JSON op 'display_conversation' sent 157 bytes
+JSON op 'send_message' sent 168 bytes
+JSON op 'read_messages' sent 149 bytes
+JSON op 'delete_message' sent 152 bytes
+JSON op 'delete_account' sent 131 bytes
 
 
 Thinking about the shape of our packet is something I want to do carefully since I've never written a wire protocol from the ground-up before. Thinking on first principles, I would think our protocol should adhere to the following axioms:
