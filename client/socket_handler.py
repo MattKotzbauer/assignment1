@@ -338,52 +338,100 @@ class Client:
                           ... 
                       ] }
         """
-        if self.use_json:
-            packet = self.build_json_packet({
-                "opcode": "display_conversation",
-                "user_id": user_id,
-                "session_token": session_token,
-                "conversant_id": conversant_id
-            })
-            response = self.send_request(packet)
-            json_str = response[4:].decode('utf-8')
-            response_data = json.loads(json_str)
-            messages = response_data.get("messages", [])
-            result = []
-            for msg in messages:
-                result.append((msg.get("message_id"), msg.get("content"), msg.get("is_sender")))
-            return result
-        else:
-            packet_body = bytes([0x11]) \
-                          + user_id.to_bytes(2, byteorder='big') \
-                          + bytes.fromhex(session_token) \
-                          + conversant_id.to_bytes(2, byteorder='big')
-            packet_length = len(packet_body).to_bytes(4, byteorder='big')
-            packet = packet_length + packet_body
-            response = self.send_request(packet)
-            if len(response) < 4 + 1 + 4:
-                raise Exception("Incomplete response")
-            opcode = response[4]
-            if opcode != 0x12:
-                raise Exception("Unexpected opcode in display_conversation")
-            message_count = int.from_bytes(response[5:9], byteorder='big')
-            messages = []
-            current_pos = 9
-            for _ in range(message_count):
-                if len(response) < current_pos + 4 + 2 + 1:
-                    raise Exception("Incomplete message data")
-                msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
-                current_pos += 4
-                msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
-                current_pos += 2
-                is_sender = response[current_pos] == 0x01
-                current_pos += 1
-                if len(response) < current_pos + msg_length:
-                    raise Exception("Incomplete message content")
-                msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
-                current_pos += msg_length
-                messages.append((msg_id, msg_content, is_sender))
-            return messages
+        try:
+            if not self._connected:
+                print("Not connected to server")
+                return []
+
+            if self.use_json:
+                packet = self.build_json_packet({
+                    "opcode": "display_conversation",
+                    "user_id": user_id,
+                    "session_token": session_token,
+                    "conversant_id": conversant_id
+                })
+                response = self.send_request(packet)
+                try:
+                    json_str = response[4:].decode('utf-8')
+                    response_data = json.loads(json_str)
+                    messages = response_data.get("messages", [])
+                    result = []
+                    for msg in messages:
+                        if all(k in msg for k in ("message_id", "content", "is_sender")):
+                            result.append((msg["message_id"], msg["content"], msg["is_sender"]))
+                    return result
+                except (UnicodeDecodeError, json.JSONDecodeError) as e:
+                    print(f"Error decoding JSON response: {str(e)}")
+                    return []
+            else:
+                packet_body = bytes([0x11]) \
+                              + user_id.to_bytes(2, byteorder='big') \
+                              + bytes.fromhex(session_token) \
+                              + conversant_id.to_bytes(2, byteorder='big')
+                packet_length = len(packet_body).to_bytes(4, byteorder='big')
+                packet = packet_length + packet_body
+                response = self.send_request(packet)
+
+                # Validate minimum response length (header + opcode + message count)
+                if len(response) < 9:  # 4 (length) + 1 (opcode) + 4 (message count)
+                    print("Response too short")
+                    return []
+
+                opcode = response[4]
+                if opcode != 0x12:
+                    print(f"Unexpected opcode: {opcode}")
+                    return []
+
+                message_count = int.from_bytes(response[5:9], byteorder='big')
+                if message_count < 0 or message_count > 1000:  # Sanity check
+                    print(f"Invalid message count: {message_count}")
+                    return []
+
+                messages = []
+                current_pos = 9
+
+                for i in range(message_count):
+                    try:
+                        # Check if we have enough bytes for the message header
+                        if len(response) < current_pos + 7:  # 4 (msg_id) + 2 (length) + 1 (is_sender)
+                            print(f"Incomplete message header at position {current_pos}")
+                            break
+
+                        msg_id = int.from_bytes(response[current_pos:current_pos+4], byteorder='big')
+                        current_pos += 4
+                        msg_length = int.from_bytes(response[current_pos:current_pos+2], byteorder='big')
+                        current_pos += 2
+
+                        if msg_length < 0 or msg_length > 10000:  # Sanity check
+                            print(f"Invalid message length: {msg_length}")
+                            break
+
+                        is_sender = response[current_pos] == 0x01
+                        current_pos += 1
+
+                        # Check if we have enough bytes for the message content
+                        if len(response) < current_pos + msg_length:
+                            print(f"Incomplete message content at position {current_pos}")
+                            break
+
+                        try:
+                            msg_content = response[current_pos:current_pos+msg_length].decode('utf-8')
+                            messages.append((msg_id, msg_content, is_sender))
+                        except UnicodeDecodeError as e:
+                            print(f"Error decoding message content: {str(e)}")
+                            break
+
+                        current_pos += msg_length
+
+                    except Exception as e:
+                        print(f"Error processing message {i}: {str(e)}")
+                        break
+
+                return messages
+
+        except Exception as e:
+            print(f"Error in display_conversation: {str(e)}")
+            return []
 
     # 0x13: Send Message
     def send_message(self, user_id: int, session_token: str, recipient_id: int, message: str) -> None:

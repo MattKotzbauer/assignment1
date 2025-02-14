@@ -32,6 +32,9 @@ class ChatInterface:
         self.current_user_id = None
         self.current_token = None
         self.message_ids = []
+        
+        # Map to store user IDs for each list index
+        self.user_id_map = {}
 
         try:
             self.client = Client(host=host, port=int(port))
@@ -61,6 +64,13 @@ class ChatInterface:
 
     def get_userID_by_username(self, username: str) -> int:
         print(f"Finding ID for username: {username}")
+        # Clean up display-related text
+        if '[NEW]' in username:
+            username = username.replace('[NEW] ', '')
+        if ' (UNREAD:' in username:
+            username = username.split(' (UNREAD:')[0]
+        username = username.strip()
+        print(f"Cleaned username for lookup: {username}")
         found, user_id = self.client.get_user_by_username(username)
         return user_id if found else 0
     
@@ -475,14 +485,24 @@ class ChatInterface:
             
             # Count unread messages per sender
             # c[0]: message UID, c[1]: sender ID, c[2]: receiver ID
+            print("Getting unread messages...")
             current_unread_messages = self.client.get_unread_messages(self.current_user_id, self.current_token)
+            print(f"Found {len(current_unread_messages)} unread messages")
+            
             for c in current_unread_messages:
-                curr_msg = get_message_info(self.current_user_id, self.current_token, c[0])
-                if curr_msg:
-                    sender_username = self.get_username_by_id(c[1])
-                    if sender_username:
-                        unread_users.add(sender_username)
-                        unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
+                print(f"Processing message {c[0]} from sender {c[1]}")
+                try:
+                    # Get message info: (has_been_read, sender_id, content)
+                    curr_msg = self.client.get_message_info(self.current_user_id, self.current_token, c[0])
+                    if curr_msg and not curr_msg[0]:  # If message exists and is unread
+                        sender_username = self.get_username_by_id(c[1])
+                        print(f"Unread message from {sender_username}: {curr_msg[2]}")
+                        if sender_username:
+                            unread_users.add(sender_username)
+                            unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
+                            print(f"Updated unread count for {sender_username} to {unread_counts[sender_username]}")
+                except Exception as e:
+                    print(f"Error processing message {c[0]}: {str(e)}")
                         
             # for msg_id in current_user.unread_messages:
                 # msg = message_base.messages.get(msg_id)
@@ -492,22 +512,40 @@ class ChatInterface:
                         # unread_users.add(sender_username)
                         # unread_counts[sender_username] = unread_counts.get(sender_username, 0) + 1
             
+            # Clear the user ID map
+            self.user_id_map.clear()
+            
             # Add users with unread messages at the top
             if unread_users:
+                separator_idx = self.users_list.size()
                 self.users_list.insert(tk.END, "━━━ Unread Messages ━━━")
+                self.user_id_map[separator_idx] = None  # Separator has no user ID
+                
                 for username in sorted(unread_users):
                     if username != current_username:
                         display_text = f"[NEW] {username} (UNREAD: {unread_counts[username]})"
+                        list_idx = self.users_list.size()
                         self.users_list.insert(tk.END, display_text)
                         self.users_list.itemconfig(tk.END, fg='red')
+                        # Store user ID in the map
+                        user_id = self.get_userID_by_username(username)
+                        if user_id:
+                            self.user_id_map[list_idx] = user_id
                 
                 # Add separator
+                separator_idx = self.users_list.size()
                 self.users_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
+                self.user_id_map[separator_idx] = None  # Separator has no user ID
             
             # Add other users
             for username in sorted(users):
                 if username != current_username and username not in unread_users:
+                    list_idx = self.users_list.size()
                     self.users_list.insert(tk.END, username)
+                    # Store user ID in the map
+                    user_id = self.get_userID_by_username(username)
+                    if user_id:
+                        self.user_id_map[list_idx] = user_id
             
             # Restore selection if it still exists
             if current_selection:
@@ -563,92 +601,111 @@ class ChatInterface:
     
     def display_messages(self, mark_as_read=False):
         """Read and display messages"""
-        print("Refreshing messages...")
-        self.messages_list.delete(0, tk.END)
-        self.message_ids.clear()
-        
-        # Get selected user
-        selection = self.users_list.curselection()
-        if not selection:
-            self.messages_list.insert(tk.END, "Select a user to view messages")
-            return
+        try:
+            print("Refreshing messages...")
+            self.messages_list.delete(0, tk.END)
+            self.message_ids.clear()
             
-        selected_text = self.users_list.get(selection[0])
-        if '━' in selected_text:  # Skip if separator selected
-            return
+            # Get selected user
+            selection = self.users_list.curselection()
+            if not selection:
+                self.messages_list.insert(tk.END, "Select a user to view messages")
+                return
             
-        # Extract username from display text (remove unread count if present)
-        selected_username = selected_text.split(' (UNREAD:')[0] if ' (UNREAD:' in selected_text else selected_text
-        # selected_user = get_user_by_username(selected_username)
-        selected_userID = self.get_userID_by_username(selected_username)
-        if not selected_userID:
-            return
-        
-        # Get all messages between current user and selected user
-        conversation_key = tuple(sorted([self.current_user_id, selected_userID]))
-        # if conversation_key not in conversations.conversations:
-            # self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
-            # return
-        curr_conversation = self.client.display_conversation(self.current_user_id, self.current_token, selected_userID)
-        if not curr_conversation:
-            self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
-            return
-        
-        
-        # Get messages for the current conversation
-        
-        # messages = conversations.conversations[conversation_key]
-        # messages = self.client.display_conversation() self.current_user_id, current.token, RECEIVER_ID
-        # messages.sort(key=lambda x: x.uid)  # Sort by message ID to maintain order
-        # curr_conversation.sort(key = lambda c: c[0]) # (idt we need to sort that right)
-
-        
-        # (for each element in curr_conversation: c[0] = UID: int, c[1] = content: str, c[2] = isSender: bool)
-        
-        # Separate unread and read messages
-        unread_messages = []
-        read_messages = []
-        
-        for conv_msg in curr_conversation:
-            if conv_msg[2]:
-                read_messages.append((conv_msg, f"You: {conv_msg[1]}"))
-            else:
-                # sender_username = get_username_by_id(msg.sender_id)
-                # message_info: [0]: has_been_read: bool, [1]: sender ID: int, [2]: content: str
-                message_info = self.client.get_message_info(self.current_user_id, self.current_token, conv_msg[0])
+            selected_index = selection[0]
+            print(f"Selected index: {selected_index}")
+            
+            # Get user ID directly from the map
+            selected_userID = self.user_id_map.get(selected_index)
+            print(f"Selected user ID from map: {selected_userID}")
+            
+            if not selected_userID:  # Skip if separator or invalid selection
+                print("No user ID found in map")
+                return
                 
-                # if not msg.has_been_read:
-                if not message_info[0]: 
-                    unread_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
-                    # Always mark messages as read when viewing them
-                    self.client.mark_message_as_read(self.current_user_id, self.current_token, conv_msg[0])
-                    self.client.read_messages(self.current_user_id, self.current_token, 1)
-                    # Refresh the user list to update unread counts
-                    self.refresh_user_list()
-                else:
-                    read_messages.append((conv_msg, f"{selected_username}: {conv_msg[1]}"))
-        
-        # Display unread messages first if any
-        if unread_messages:
-            self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
-            for conv_msg, text in unread_messages:
+            selected_text = self.users_list.get(selected_index)
+            if '━' in selected_text:  # Skip if separator selected
+                print("Separator selected, skipping")
+                return
+            
+            # Get username for display
+            selected_username = self.get_username_by_id(selected_userID)
+            if not selected_username:
+                print(f"Could not get username for ID: {selected_userID}")
+                return
+            
+            # Get all messages between current user and selected user
+            curr_conversation = self.client.display_conversation(self.current_user_id, self.current_token, selected_userID)
+            if not curr_conversation:
+                self.messages_list.insert(tk.END, f"No messages with {selected_username} yet")
+                return
+            
+            # Process messages from the conversation
+            unread_messages = []
+            read_messages = []
+            marked_messages_as_read = False
+            
+            # First pass: Collect all messages and mark them as read if needed
+            for conv_msg in curr_conversation:
+                try:
+                    msg_id, msg_content, is_sender = conv_msg
+                    
+                    if is_sender:  # Message sent by current user
+                        read_messages.append((conv_msg, f"You: {msg_content}"))
+                    else:  # Message received from other user
+                        try:
+                            # Get message info: (has_been_read, sender_id, content)
+                            message_info = self.client.get_message_info(self.current_user_id, self.current_token, msg_id)
+                            
+                            if message_info and not message_info[0]:  # If message exists and is unread
+                                unread_messages.append((conv_msg, f"{selected_username}: {msg_content}"))
+                                
+                                if mark_as_read:
+                                    try:
+                                        # Mark message as read
+                                        self.client.mark_message_as_read(self.current_user_id, self.current_token, msg_id)
+                                        marked_messages_as_read = True
+                                        print(f"Marked message {msg_id} from {selected_username} as read")
+                                    except Exception as e:
+                                        print(f"Error marking message {msg_id} as read: {str(e)}")
+                            else:
+                                read_messages.append((conv_msg, f"{selected_username}: {msg_content}"))
+                        except Exception as e:
+                            print(f"Error getting message info for {msg_id}: {str(e)}")
+                            read_messages.append((conv_msg, f"{selected_username}: {msg_content}"))
+                except Exception as e:
+                    print(f"Error processing message in conversation: {str(e)}")
+                    continue
+            
+            # Display unread messages first if any
+            if unread_messages:
+                self.messages_list.insert(tk.END, "━━━ Unread Messages ━━━")
+                for conv_msg, text in unread_messages:
+                    self.messages_list.insert(tk.END, text)
+                    self.message_ids.append(conv_msg[0])
+                    self.messages_list.itemconfig(tk.END, fg='red')
+                
+                # Add separator
+                self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
+            
+            # Display read messages
+            for conv_msg, text in read_messages:
                 self.messages_list.insert(tk.END, text)
                 self.message_ids.append(conv_msg[0])
-                self.messages_list.itemconfig(tk.END, fg='red')
             
-            # Add separator
-            self.messages_list.insert(tk.END, "━━━━━━━━━━━━━━━━━━━")
-        
-        # Display read messages
-        for conv_msg, text in read_messages:
-            self.messages_list.insert(tk.END, text)
-            self.message_ids.append(conv_msg[0])
-        
-        # Scroll to show unread messages if any, otherwise scroll to bottom
-        if unread_messages and not mark_as_read:
-            self.messages_list.see(0)
-        else:
-            self.messages_list.see(tk.END)
+            # Scroll to show unread messages if any, otherwise scroll to bottom
+            if unread_messages and not mark_as_read:
+                self.messages_list.see(0)
+            else:
+                self.messages_list.see(tk.END)
+                
+            # If we marked any messages as read, refresh the user list to update unread counts
+            if marked_messages_as_read:
+                self.refresh_user_list()
+                
+        except Exception as e:
+            print(f"Error in display_messages: {str(e)}")
+            messagebox.showerror("Error", f"Failed to display messages: {str(e)}")
     
     def delete_selected_messages(self):
         """Delete selected messages"""
@@ -725,49 +782,62 @@ class ChatInterface:
     
     def on_user_select(self, event):
         """Handle user selection from the list"""
-        selection = self.users_list.curselection()
-        if not selection:
-            self.selected_user_label.config(text="No user selected")
-            return
+        try:
+            # Get selected user
+            selection = self.users_list.curselection()
+            if not selection:
+                self.selected_user_label.config(text="No user selected")
+                return
             
-        # Get selected item text and extract username
-        selected_text = self.users_list.get(selection[0])
-        
-        # Skip if separator line is selected
-        if '━' in selected_text:
-            self.users_list.selection_clear(0, tk.END)
-            return
+            selected_index = selection[0]
+            print(f"Selected index: {selected_index}")
             
-        # If user has unread messages, mark them as read
-        if '(MESSAGES:' in selected_text:
-            username = selected_text.split(' (MESSAGES:')[0]
-            # selected_user = get_user_by_username(username)
-            selected_userID = self.get_userID_by_username(username)
-            if selected_userID:
-                # Display messages with mark_as_read=True to mark them as read
-                self.display_messages(mark_as_read=True)
-                # Refresh the user list to move the user to the regular section
+            # Get user ID from the map
+            selected_userID = self.user_id_map.get(selected_index)
+            if not selected_userID:  # Skip if separator or invalid selection
+                print("No valid user ID found for selection")
+                self.users_list.selection_clear(0, tk.END)
+                return
+            
+            # Get the display text and username
+            selected_text = self.users_list.get(selected_index)
+            
+            # Remove [NEW] prefix if present for display purposes
+            if '[NEW]' in selected_text:
+                selected_text = selected_text.replace('[NEW] ', '')
+                
+            selected_username = self.get_username_by_id(selected_userID)
+            if not selected_username:
+                print(f"Could not get username for ID: {selected_userID}")
+                return
+                
+            print(f"Selected user: {selected_username} (ID: {selected_userID})")
+            
+            # Store the current selection
+            self.selected_user_id = selected_userID
+            
+            # Display messages and mark them as read
+            self.display_messages(mark_as_read=True)
+            
+            # If user had unread messages, refresh the list to update their position
+            if ' (UNREAD:' in selected_text:
+                print(f"Refreshing user list to update unread status for {selected_username}")
                 self.refresh_user_list()
+                
                 # Re-select the user in the regular section
                 for i in range(self.users_list.size()):
-                    if self.users_list.get(i) == username:
+                    if self.user_id_map.get(i) == selected_userID:
                         self.users_list.selection_clear(0, tk.END)
                         self.users_list.selection_set(i)
                         self.users_list.see(i)
                         break
-            
-        # Extract username from display text (remove message count if present)
-        selected_username = selected_text.split(' (MESSAGES:')[0]
+                        
+        except Exception as e:
+            print(f"Error in on_user_select: {str(e)}")
+            messagebox.showerror("Error", f"Failed to select user: {str(e)}")
         
-        # If this is a different user than before, mark previous messages as read
-        if hasattr(self, 'previous_selected_user') and self.previous_selected_user != selected_username:
-            self.display_messages(mark_as_read=False)  # Mark previous conversation as read
-        
-        self.previous_selected_user = selected_username
+        # Update the selected user label
         self.selected_user_label.config(text=f"Selected: {selected_username}")
-        
-        # Update message display to show conversation with selected user
-        self.display_messages(mark_as_read=False)
     
     def run(self):
         """Start the main event loop"""
