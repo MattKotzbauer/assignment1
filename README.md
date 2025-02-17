@@ -1,6 +1,8 @@
 # CS2620 Problem Set 1: Chat Application + Custom Wire Protocol
 
-
+**Engineering Notebook**: Contained in `engineering_notebook_final.md`
+**Implementation Files**: Contained in `client/` and `server/` directories, with `client/socket_handler.py` and `server/socket_handler.py` being their respective entry points
+**High-Level Documentation + Usage Instructions**: Contained below!
 
 A Python-based chat application implementing both custom wire protocol and JSON-based communication.
 
